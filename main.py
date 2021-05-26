@@ -14,4 +14,3 @@ payload = {"grant_type": "client_credentials"}
 response = requests.post(endpoint, data=payload, headers=headers)
 access_token = json.loads(response.text)['access_token']
 
-print(access_token)
