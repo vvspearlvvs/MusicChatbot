@@ -36,7 +36,7 @@ def search(token):
             retry_afer = json.loads(search_r.headers)['retry-After']
             time.sleep(int(retry_afer))
             search_r=requests.get(endpoint,params=query_params,headers=headers)
-        elif search_r.code==401: #a
+        elif search_r.code==401: #get token again
             headers = get_token(client_id,client_secret)
             search_r=requests.get(endpoint,params=query_params,headers=headers)
         else:
