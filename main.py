@@ -4,8 +4,8 @@ import json
 import logging
 import time
 
-client_id = "c87e807943a1483883faaaa881aa43ef"
-client_secret = "110de254602e440ea1f72f08f8396ccc"
+client_id = ""
+client_secret = ""
 
 def get_token(client_id,client_secret):
 
