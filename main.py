@@ -17,18 +17,20 @@ def get_token(client_id,client_secret):
     payload = {"grant_type": "client_credentials"}
 
     response = requests.post(endpoint, data=payload, headers=headers)
-    print(json.loads(response.text))
+    #print(json.loads(response.text))
     access_token = json.loads(response.text)['access_token']
+    #print(access_token)
 
     return access_token
 
-def search(token):
+def search(artist_name,token):
     endpoint = "https://api.spotify.com/v1/search"
 
     headers = {"Authorization": "Bearer  {}".format(token)}
-    query_params = {'q':'BTS','type':'album','limit':5}
+    query_params = {'q':artist_name,'type':'artist','limit':'1'}
 
     search_r=requests.get(endpoint,params=query_params,headers=headers)
+    search_ar=json.loads(search_r.text)
 
     if search_r.status_code!=200:
         logging.error(json.loads(search_r.text))
@@ -42,10 +44,11 @@ def search(token):
         else:
             logging.error(json.loads(search_r.text))
 
-    return search_r
+    return search_ar
 
 def main():
     token = get_token(client_id,client_secret)
-    search(token)
-
+    search_data = search('BTS',token)['artists']
+    for item in search_data['items']:
+        print(item.keys())
 main()
