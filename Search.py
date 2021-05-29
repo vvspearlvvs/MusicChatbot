@@ -4,7 +4,7 @@ import logging
 import time
 
 
-def search(artist_name,headers):
+def artist(artist_name,headers):
     endpoint = "https://api.spotify.com/v1/search"
 
     query_params = {'q':artist_name,'type':'artist','limit':'1'}
