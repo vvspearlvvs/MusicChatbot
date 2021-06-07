@@ -11,14 +11,10 @@ client_secret = ""
 endpoint = "https://accounts.spotify.com/api/token"
 
 encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
-
 headers = {"Authorization": "Basic {}".format(encoded)}
 payload = {"grant_type": "client_credentials"}
-
 response = requests.post(endpoint, data=payload, headers=headers)
-#print(json.loads(response.text))
 access_token = json.loads(response.text)['access_token']
-#print(access_token)
 
 headers = {"Authorization": "Bearer  {}".format(access_token)}
 
@@ -47,3 +43,4 @@ for item in search_data['items']:
         track_images =item['images'][0]['url']
 
 #2.2 insert DB(NoSQL:dynamoDB)
+
