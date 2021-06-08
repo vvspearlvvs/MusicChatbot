@@ -29,6 +29,27 @@ def get_header():
 def insert_row(cursor,data,table):
     #mysql insert
 
+# data의 개수에 맞게 넣어 줌
+     placeholders = ', '.join(['%s'] * len(data)) # 형태: '%s, %s, %s, ...'
+     columns = ', '.join(data.keys())
+     key_placeholders = ', '.join(['{0}=values({0})'.format(k) for k in data.keys()])
+
+     sql = "INSERT INTO %s ( %s ) VALUES ( %s ) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
+
+     print(sql) # 아래와 같은 형태
+     '''
+     INSERT INTO artists ( id, name, followers, popularity, url, image_url )
+     VALUES ( %s, %s, %s, %s, %s, %s )
+     ON DUPLICATE KEY UPDATE id=values(id), name=values(name), followers=values(followers),
+     popularity=values(popularity), url=values(url), image_url=values(image_url)
+     '''
+
+     cursor.execute(sql, list(data.values()))
+#     # 여기서 list(data.values()) 말고 그냥 data.values() 하면 오류 남: 'dict_values' object has no attribute 'translate'
+#     cursor.execute 안에 넣을 수 없는 데이터 형식(dict_values)인 듯.
+#    print(data.values())
+
+
 def get_artist(artist_name,headers):
     endpoint = "https://api.spotify.com/v1/search"
 
@@ -149,3 +170,4 @@ def lambda_handler(event, context):
             'Access-Control-Allow-Origin': '*',
         }
     }
+
