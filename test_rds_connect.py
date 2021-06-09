@@ -3,9 +3,8 @@ import logging
 import pymysql
 
 
-
-rds_host ='local' #RDS로 변경시 Public endpoint
-rds_user ='root' #RDS로 변경시 admin
+rds_host ='database-test.cj2sbwq1t1o1.ap-northeast-2.rds.amazonaws.com'
+rds_user ='admin'
 rds_pwd = 'qwer1234'
 rds_db = 'musicdb'
 
@@ -14,13 +13,13 @@ def lambda_handler():
     curs = conn.cursor()
     print(curs)
 
-    sql = "describe select * from artist"
+    sql = "select * from artists"
     curs.execute(sql)
     rows = curs.fetchall()
     result = 0
     for row in rows:
         result = row[1]
-
+    
     conn.close()
     return
 
