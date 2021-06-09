@@ -19,7 +19,7 @@ def lambda_handler():
     result = 0
     for row in rows:
         result = row[1]
-    
+
     conn.close()
     return
 
