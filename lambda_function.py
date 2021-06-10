@@ -50,6 +50,40 @@ def insert_row(cursor,data,table):
      cursor.execute(sql, list(data.values()))
 #    print(data.values())
 
+
+#카톡챗봇 메세지 형식 함수
+def response_select(artist_name):
+    #1.simple text형식 : 메세지만 나갈떄
+    result = {
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                {
+                    "simpleText": {
+                        "text": "당신이 검색한 아티스트는 {}입니다.".format(artist_name)
+                    }
+                }
+            ]
+        }
+    }
+    return result
+
+def response_insert():
+    #1.simple text형식 : 메세지만 나갈떄
+    result = {
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                {
+                    "simpleText": {
+                        "text": "새로운 아티스트가 추가되었습니다.다시 아티스트명을 입력해보세요"
+                    }
+                }
+            ]
+        }
+    }
+    return result
+
 def get_artist(artist_name,headers):
     endpoint = "https://api.spotify.com/v1/search"
 
@@ -73,16 +107,16 @@ def get_artist(artist_name,headers):
     #searchAPI 정상적으로 가져온 경우
     artist_item= search_ar['artists']['items'][0]
     #DB에 있으면,mysql에 검색
-    select_query="SELECT * from artists where artist_name ='{}'".format(artist_item['name'])
+    select_query="SELECT artist_id,artist_name,image_url from artists where artist_name ='{}'".format(artist_item['name'])
     cursor.execute(select_query)
     db_result = cursor.fetchall()
-    print("select결과")
-    print(db_result)
+    #print("select row 성공")
+    #print(db_result)
 
-    #select결과 있으니까, 처음에 api로 받은 결과 리턴
+    #db에 있는거면, select결과 리턴
     if len(db_result)>0:
-        #globals()['search_ar']=db_result
-        return search_ar
+        #id,name,url=db_result[0]
+        return db_result[0]
 
     #DB에 없으면,mysql에 insert row 저장
     artist_data ={
@@ -95,9 +129,11 @@ def get_artist(artist_name,headers):
         #'genres' : artist_item['genres']
     }
     insert_row(cursor,artist_data,'artists')
-    print("insert row 성공")
     conn.commit()
-    return search_ar
+    #print("insert row 성공")
+
+    #db에 없는거면 () 리턴
+    return db_result
 
 
 def lambda_handler(event):
@@ -107,39 +143,21 @@ def lambda_handler(event):
     #print(request_body)
     #params = request_body['action']['params']
     params = event['action']['params']
-    if 'group' in params.keys():
-        artist_name = params['group'] # 그룹아티스트 파라미터
 
-        search_result = get_artist(artist_name,get_header())
-        print("return결과 ")
-        print(search_result)
+    #group = params['group'] # 그룹아티스트 파라미터
+    artist_name = event['userRequest']['utterance']
+    search_result = get_artist(artist_name,get_header())
+    #print(search_result)
 
-        result = {
-            "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "simpleText": {
-                            "text": "당신이 검색한 아티스트는 {}(그룹)입니다.".format(artist_name)
-                        }
-                    }
-                ]
-            }
-        }
-    elif 'solo' in params.keys():
-        solo=params['solo']
-        result = {
-            "version": "2.0",
-            "template": {
-                "outputs": [
-                    {
-                        "simpleText": {
-                            "text": "당신이 검색한 아티스트는 {}(솔로)입니다.".format(solo)
-                        }
-                    }
-                ]
-            }
-        }
+    #select결과가 있을때
+    if search_result:
+        id,name,url=search_result
+        result = response_select(name)
+    #select결과가 없을때
+    else:
+        result=response_insert()
+
+    print(result)
 
     return {
         'statusCode':200,
@@ -152,45 +170,63 @@ def lambda_handler(event):
 
 #테스트코드
 event={
-    "intent": {
-        "id": "1difwqws70wjl75s5eyanyxx",
-        "name": "블록 이름"
+    "bot":{
+        "id":"60b628c87e223a78e8750a68!",
+        "name":"스포티파이 검색 봇"
     },
-    "userRequest": {
-        "timezone": "Asia/Seoul",
-        "params": {
-            "ignoreMe": "true"
-        },
-        "block": {
-            "id": "1difwqws70wjl75s5eyanyxx",
-            "name": "블록 이름"
-        },
-        "utterance": "발화 내용",
-        "lang": 'null',
-        "user": {
-            "id": "908963",
-            "type": "accountId",
-            "properties": {}
-        }
-    },
-    "bot": {
-        "id": "60b628c87e223a78e8750a68",
-        "name": "봇 이름"
-    },
-    "action": {
-        "name": "mwmy9qfn9m",
-        "clientExtra": 'null',
-        "params": {
-            "group": "bts"
-        },
-        "id": "x4j1vafxl0kyq0fx8p1fmpum",
-        "detailParams": {
-            "group": {
-                "origin": "bts",
-                "value": "bts",
-                "groupName": ""
+    "intent":{
+        "id":"60bd22f6a0293f36984913ef",
+        "name":"국내아티스트명 블록 ",
+        "extra":{
+            "reason":{
+                "code":1,
+                "message":"OK"
             }
         }
-    }
+    },
+    "action":{
+        "id":"60bc72c24e460e6c6be02a11",
+        "name":"API Gateway Server",
+        "params":{
+            "group":"비투비"
+        },
+        "detailParams":{
+            "group":{
+                "groupName":"",
+                "origin":"비투비",
+                "value":"비투비"
+            }
+        },
+        "clientExtra":{
+
+        }
+    },
+    "userRequest":{
+        "block":{
+            "id":"60bd22f6a0293f36984913ef",
+            "name":"국내아티스트명 블록 "
+        },
+        "user":{
+            "id":"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24",
+            "type":"botUserKey",
+            "properties":{
+                "botUserKey":"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24",
+                "isFriend":'true',
+                "plusfriendUserKey":"cCFcsmWzskCa",
+                "bot_user_key":"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24",
+                "plusfriend_user_key":"cCFcsmWzskCa"
+            }
+        },
+        "utterance":"비투비",
+        "params":{
+            "surface":"Kakaotalk.plusfriend"
+        },
+        "lang":"ko",
+        "timezone":"Asia/Seoul"
+    },
+    "contexts":[
+
+    ]
+
 }
 lambda_handler(event)
