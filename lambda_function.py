@@ -7,8 +7,8 @@ import pymysql
 import boto3
 from boto3.dynamodb.conditions import Key,Attr
 
-client_id = "c87e807943a1483883faaaa881aa43ef"
-client_secret = "110de254602e440ea1f72f08f8396ccc"
+client_id = ""
+client_secret = ""
 
 rds_host ='localhost' #RDS로 변경시 Public endpoint
 rds_user ='root' #RDS로 변경시 admin
@@ -20,8 +20,8 @@ cursor = conn.cursor()
 
 dynamodb = boto3.resource(
     'dynamodb',
-    aws_access_key_id='AKIAR4HFJBSHV7BPZG4E',
-    aws_secret_access_key='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',
+    aws_access_key_id='',
+    aws_secret_access_key='+BX',
     region_name='ap-northeast-2'
     )
 table=dynamodb.Table('artist_toptracks')
