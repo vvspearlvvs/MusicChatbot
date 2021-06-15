@@ -4,6 +4,7 @@ import base64
 import logging
 import time
 import pymysql
+import boto3
 
 client_id = "c87e807943a1483883faaaa881aa43ef"
 client_secret = "110de254602e440ea1f72f08f8396ccc"
@@ -15,6 +16,14 @@ rds_db = 'musicdb'
 
 conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
 cursor = conn.cursor()
+
+dynamodb = boto3.resource(
+    'dynamodb',
+    aws_access_key_id='AKIAR4HFJBSH2V7NFCP2',
+    aws_secret_access_key='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',
+    region_name='ap-northeast-2'
+    )
+table=dynamodb.Table('artist_toptracks')
 
 #Spotify API연결을 위한 Token을 가져옴
 def get_header():
@@ -60,7 +69,7 @@ def response_select(artist_name):
             "outputs": [
                 {
                     "simpleText": {
-                        "text": "당신이 검색한 아티스트는 {}입니다.".format(artist_name)
+                        "text": "님이 검색한 아티스트 {} 의 노래입니다".format(artist_name)
                     }
                 }
             ]
@@ -76,7 +85,7 @@ def response_insert():
             "outputs": [
                 {
                     "simpleText": {
-                        "text": "새로운 아티스트가 추가되었습니다.다시 아티스트명을 입력해보세요"
+                        "text": "오! 새로운 아티스트인걸?! ㄴ저장ㄱ 다시검색 해보세요"
                     }
                 }
             ]
@@ -104,7 +113,7 @@ def get_artist(artist_name,headers):
         else:
             logging.error(json.loads(search_r.text))
 
-    #searchAPI 정상적으로 가져온 경우
+    #RDS작업-searchAPI 정상적으로 가져온 경우
     artist_item= search_ar['artists']['items'][0]
     #DB에 있으면,mysql에 검색
     select_query="SELECT artist_id,artist_name,image_url from artists where artist_name ='{}'".format(artist_item['name'])
@@ -135,6 +144,50 @@ def get_artist(artist_name,headers):
     #db에 없는거면 () 리턴
     return db_result
 
+def get_toptracks(artist_id,artist_name,headers):
+    endpoint = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
+
+    query_params = {'market':'KR'}
+
+    artist_t=requests.get(endpoint,params=query_params,headers=headers)
+    artist_tr=json.loads(artist_t.text)
+
+    if artist_t.status_code!=200:
+        logging.error(json.loads(artist_t.text))
+        if artist_t.status_code == 429: #too much request
+            retry_afer = json.loads(artist_t.headers)['retry-After']
+            time.sleep(int(retry_afer))
+            search_r=requests.get(endpoint,params=query_params,headers=headers)
+        elif artist_t.code==401: #get token again
+            search_r=requests.get(endpoint,params=query_params,headers=headers)
+        else:
+            logging.error(json.loads(artist_t.text))
+
+    #return artist_tr
+    #dynamodb작업-artistAPI 정상적으로 가져온 경우
+
+    for track in artist_tr['tracks']:
+        data={
+            'artist_id':artist_id,
+            'artist_name':artist_name,
+            'track_id': track['id'],
+            'track_name': track['name'],
+            'track_url': track['external_urls']['spotify'],
+            'album':
+                {'album_id': track['album']['id'],
+                 'album_name': track['album']['name'],
+                 'album_type': track['album']['album_type'],
+                 'album_image': track['album']['images'][0]['url'],
+                 'release_date': track['album']['release_date'],
+                 'total_tracks': track['album']['total_tracks']
+                 }
+
+        }
+        #data.update(track)
+        table.put_item(Item=data)
+
+    print("dynamdbinsert")
+
 
 def lambda_handler(event):
 
@@ -152,7 +205,10 @@ def lambda_handler(event):
     #select결과가 있을때
     if search_result:
         id,name,url=search_result
-        result = response_select(name)
+        result = response_select(id)
+
+        get_toptracks(id,name,get_header())
+        #dynamodb 결과 가져오기
     #select결과가 없을때
     else:
         result=response_insert()
@@ -188,13 +244,13 @@ event={
         "id":"60bc72c24e460e6c6be02a11",
         "name":"API Gateway Server",
         "params":{
-            "group":"비투비"
+            "group":"BTOB"
         },
         "detailParams":{
             "group":{
                 "groupName":"",
-                "origin":"비투비",
-                "value":"비투비"
+                "origin":"BTOB",
+                "value":"BTOB"
             }
         },
         "clientExtra":{
@@ -217,7 +273,7 @@ event={
                 "plusfriend_user_key":"cCFcsmWzskCa"
             }
         },
-        "utterance":"비투비",
+        "utterance":"BTOB",
         "params":{
             "surface":"Kakaotalk.plusfriend"
         },
