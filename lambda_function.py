@@ -5,13 +5,14 @@ import logging
 import time
 import pymysql
 import boto3
+from boto3.dynamodb.conditions import Key,Attr
 
-client_id = ""
-client_secret = ""
+client_id = "c87e807943a1483883faaaa881aa43ef"
+client_secret = "110de254602e440ea1f72f08f8396ccc"
 
 rds_host ='localhost' #RDS로 변경시 Public endpoint
-rds_user ='' #RDS로 변경시 admin
-rds_pwd = ''
+rds_user ='root' #RDS로 변경시 admin
+rds_pwd = 'qwer1234'
 rds_db = 'musicdb'
 
 conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
@@ -19,8 +20,8 @@ cursor = conn.cursor()
 
 dynamodb = boto3.resource(
     'dynamodb',
-    aws_access_key_id='',
-    aws_secret_access_key='',
+    aws_access_key_id='AKIAR4HFJBSHV7BPZG4E',
+    aws_secret_access_key='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',
     region_name='ap-northeast-2'
     )
 table=dynamodb.Table('artist_toptracks')
@@ -113,21 +114,10 @@ def get_artist(artist_name,headers):
         else:
             logging.error(json.loads(search_r.text))
 
-    #RDS작업-searchAPI 정상적으로 가져온 경우
+    #RDS작업
     artist_item= search_ar['artists']['items'][0]
-    #DB에 있으면,mysql에 검색
-    select_query="SELECT artist_id,artist_name,image_url from artists where artist_name ='{}'".format(artist_item['name'])
-    cursor.execute(select_query)
-    db_result = cursor.fetchall()
-    #print("select row 성공")
-    #print(db_result)
 
-    #db에 있는거면, select결과 리턴
-    if len(db_result)>0:
-        #id,name,url=db_result[0]
-        return db_result[0]
-
-    #DB에 없으면,mysql에 insert row 저장
+    #mysql에 insert row 저장
     artist_data ={
         'artist_id' : artist_item['id'],
         'artist_name' : artist_item['name'],
@@ -139,10 +129,9 @@ def get_artist(artist_name,headers):
     }
     insert_row(cursor,artist_data,'artists')
     conn.commit()
-    #print("insert row 성공")
+    print("insert mysql 성공")
 
-    #db에 없는거면 () 리턴
-    return db_result
+    return artist_data['artist_id']
 
 def get_toptracks(artist_id,artist_name,headers):
     endpoint = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
@@ -186,7 +175,7 @@ def get_toptracks(artist_id,artist_name,headers):
         #data.update(track)
         table.put_item(Item=data)
 
-    print("dynamdbinsert")
+    print("insert dynamodb 성공")
 
 
 def lambda_handler(event):
@@ -198,26 +187,34 @@ def lambda_handler(event):
     params = event['action']['params']
 
     #group = params['group'] # 그룹아티스트 파라미터
-    artist_name = event['userRequest']['utterance']
-    search_result = get_artist(artist_name,get_header())
-    #print(search_result)
+    input_artist = event['userRequest']['utterance']
 
-    #select결과가 있을때
-    if search_result:
-        id,name,url=search_result
-        result = response_select(id)
+    #DB에 있으면,mysql에 검색
+    select_query="SELECT artist_id,artist_name,image_url from artists where artist_name ='{}'".format(input_artist)
+    cursor.execute(select_query)
+    artist_result = cursor.fetchall()
 
-        get_toptracks(id,name,get_header())
-        #dynamodb 결과 가져오기
-    #select결과가 없을때
+    #db에 있는 아티스트일경우, select결과 리턴
+    if len(artist_result)>0:
+        id,name,url=artist_result[0]
+        #dynanoDB 파티션키 : track_id
+        #track_result=table.query(KeyConditionExpression=Key('artist_id').eq(id))
+        track_result = table.scan(FilterExpression = Attr('artist_id').eq(id))
+        print(track_result)
+        #메세지
+        message = response_select(name)
+
+    #db에 없는 아티스트일경우,
     else:
-        result=response_insert()
+        artist_id = get_artist(input_artist,get_header())
+        get_toptracks(artist_id,input_artist,get_header())
+        message=response_insert()
 
-    print(result)
+    print(message)
 
     return {
         'statusCode':200,
-        'body': json.dumps(result),
+        'body': json.dumps(message),
         'headers': {
             'Access-Control-Allow-Origin': '*',
         }
