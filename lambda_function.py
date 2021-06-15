@@ -6,12 +6,12 @@ import time
 import pymysql
 import boto3
 
-client_id = "c87e807943a1483883faaaa881aa43ef"
-client_secret = "110de254602e440ea1f72f08f8396ccc"
+client_id = ""
+client_secret = ""
 
 rds_host ='localhost' #RDS로 변경시 Public endpoint
-rds_user ='root' #RDS로 변경시 admin
-rds_pwd = 'qwer1234'
+rds_user ='' #RDS로 변경시 admin
+rds_pwd = ''
 rds_db = 'musicdb'
 
 conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
@@ -19,8 +19,8 @@ cursor = conn.cursor()
 
 dynamodb = boto3.resource(
     'dynamodb',
-    aws_access_key_id='AKIAR4HFJBSH2V7NFCP2',
-    aws_secret_access_key='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',
+    aws_access_key_id='',
+    aws_secret_access_key='',
     region_name='ap-northeast-2'
     )
 table=dynamodb.Table('artist_toptracks')
