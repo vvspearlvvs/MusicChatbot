@@ -12,7 +12,7 @@ client_secret = ""
 
 rds_host ='localhost' #RDS로 변경시 Public endpoint
 rds_user ='root' #RDS로 변경시 admin
-rds_pwd = 'qwer1234'
+rds_pwd = ''
 rds_db = 'musicdb'
 
 conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
@@ -21,10 +21,10 @@ cursor = conn.cursor()
 dynamodb = boto3.resource(
     'dynamodb',
     aws_access_key_id='',
-    aws_secret_access_key='+BX',
+    aws_secret_access_key='',
     region_name='ap-northeast-2'
     )
-table=dynamodb.Table('artist_toptracks')
+table=dynamodb.Table('artist_toptracks') #dynanoDB 파티션키 : track_id
 
 #Spotify API연결을 위한 Token을 가져옴
 def get_header():
@@ -62,15 +62,32 @@ def insert_row(cursor,data,table):
 
 
 #카톡챗봇 메세지 형식 함수
-def response_select(artist_name):
-    #1.simple text형식 : 메세지만 나갈떄
-    result = {
+def response_select(name,followers,popularity,artist_url,image_url):
+    #2.basic 카드형 : 처음에 아티스트 관련 정보만
+    result={
         "version": "2.0",
         "template": {
             "outputs": [
                 {
-                    "simpleText": {
-                        "text": "님이 검색한 아티스트 {} 의 노래입니다".format(artist_name)
+                    "basicCard": {
+                        "title": name,
+                        "description": "followers: "+str(followers)+", popularity: "+str(popularity),
+                        "thumbnail": {
+                            "imageUrl": image_url
+                        },
+                        "buttons": [
+                            {
+                                "action":  "webLink",
+                                "label": "Spotify에서 확인하기",
+                                "webLinkUrl": artist_url
+                            },
+                            {
+                                "action": "message",
+                                "label": "최근 발매 노래 검색",
+                                "messageText": "노래정보를 알려줄게"
+                            },
+
+                        ]
                     }
                 }
             ]
@@ -190,24 +207,25 @@ def lambda_handler(event):
     input_artist = event['userRequest']['utterance']
 
     #DB에 있으면,mysql에 검색
-    select_query="SELECT artist_id,artist_name,image_url from artists where artist_name ='{}'".format(input_artist)
+    select_query="SELECT * from artists where artist_name ='{}'".format(input_artist)
     cursor.execute(select_query)
     artist_result = cursor.fetchall()
 
     #db에 있는 아티스트일경우, select결과 리턴
     if len(artist_result)>0:
-        id,name,url=artist_result[0]
+        id,name,followers,popularity,artist_url,image_url = artist_result[0]
         #dynanoDB 파티션키 : track_id
         #track_result=table.query(KeyConditionExpression=Key('artist_id').eq(id))
-        track_result = table.scan(FilterExpression = Attr('artist_id').eq(id))
-        print(track_result)
+        #track_result = table.scan(FilterExpression = Attr('artist_id').eq(id))
+        #print(track_result)
+
         #메세지
-        message = response_select(name)
+        message = response_select(name,followers,popularity,artist_url,image_url)
 
     #db에 없는 아티스트일경우,
     else:
         artist_id = get_artist(input_artist,get_header())
-        get_toptracks(artist_id,input_artist,get_header())
+        #get_toptracks(artist_id,input_artist,get_header())
         message=response_insert()
 
     print(message)
