@@ -1,0 +1,60 @@
+#예시 : 카카오챗봇을 통해 'bts'라는 아티스트명을 입력했을때 request
+{
+  "bot":{
+    "id":"60b628c87e223a78e8750a68!",
+    "name":"스포티파이 검색 봇"
+  },
+  "intent":{
+    "id":"60bd22f6a0293f36984913ef",
+    "name":"국내아티스트명 블록 ",
+    "extra":{
+      "reason":{
+        "code":1,
+        "message":"OK"
+      }
+    }
+  },
+  "action":{
+    "id":"60bc72c24e460e6c6be02a11",
+    "name":"API Gateway Server",
+    "params":{
+      "group":"bts"
+    },
+    "detailParams":{
+      "group":{
+        "groupName":"",
+        "origin":"bts",
+        "value":"bts"
+      }
+    },
+    "clientExtra":{
+
+    }
+  },
+  "userRequest":{
+    "block":{
+      "id":"60bd22f6a0293f36984913ef",
+      "name":"국내아티스트명 블록 "
+    },
+    "user":{
+      "id":"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24",
+      "type":"botUserKey",
+      "properties":{
+        "botUserKey":"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24",
+        "isFriend":true,
+        "plusfriendUserKey":"cCFcsmWzskCa",
+        "bot_user_key":"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24",
+        "plusfriend_user_key":"cCFcsmWzskCa"
+      }
+    },
+    "utterance":"bts",
+    "params":{
+      "surface":"Kakaotalk.plusfriend"
+    },
+    "lang":"ko",
+    "timezone":"Asia/Seoul"
+  },
+  "contexts":[
+
+  ]
+}
