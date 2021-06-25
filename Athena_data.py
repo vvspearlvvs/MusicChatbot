@@ -89,7 +89,7 @@ def main():
 
         if r['ResponseMetadata']['HTTPStatusCode'] == 200:
             result = get_query_result(r['QueryExecutionId'], Athena)
-            print(result) # 파티션 생성 결과
+            #print(result) # 파티션 생성 결과
             print('top_tracks partition update!') # 신규 파티션 생성
 
     #audio table query
@@ -120,7 +120,7 @@ def main():
         r = query_athena(query, Athena)
         if r['ResponseMetadata']['HTTPStatusCode'] == 200:
             result = get_query_result(r['QueryExecutionId'], Athena)
-            print(result)
+            #print(result)
             print('audio_features partition update!') # 신규 파티션 생성
 
     #아티스트별 평균수치 계싼
@@ -147,7 +147,6 @@ def main():
     r = query_athena(query, Athena)
 
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
-        print("join query test ")
         result = get_query_result(r['QueryExecutionId'], Athena)
         print(result)
         print('join result') #join 결과
