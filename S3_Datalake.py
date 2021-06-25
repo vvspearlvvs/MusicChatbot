@@ -74,6 +74,23 @@ def toptrack_s3(artist_result,headers):
         print(top_tracks)
         return top_tracks
 
+def audio_s3(tracks_batch,headers):
+    audio_features = []
+
+    for i in tracks_batch:
+        ids = ','.join(i) # API 호출에 맞는 형식(comma-separated list)
+        URL = "https://api.spotify.com/v1/audio-features/?ids={}".format(ids)
+
+        r = requests.get(URL, headers=headers)
+        raw = json.loads(r.text) # audio_features는 flat한 구조라, raw data를 그대로 저장하면 됨.
+        print(raw)
+        #audio_features 데이터는 nested 구조 없이 각 item들이 key-value 형식으로 되어 있음
+        audio_features.extend(raw['audio_features'])
+        # append와 extend 차이: extend는 리스트를 통째로 넣는 게 아니고, 리스트의 각 요소를 넣어 줌
+        # [].extend([a,b,c]) -> [[a,b,c]]가 아니고 [a,b,c]가 됨
+    #print(audio_features)
+    return audio_features
+
 
 def main():
     # connect MySQL
@@ -109,6 +126,19 @@ def main():
     s3_object.put(Body=data)
     print("top track s3에 저장 ")
 
+    #100개씩, audio 데이터터
+    tracks_batch = [track_ids[i: i+100] for i in range(0, len(track_ids), 100)]
+    #dict형태->dataframe형태 ->parquet형태
+    audio_features=audio_s3(tracks_batch,headers)
+    audio_features = pd.DataFrame(audio_features)
+    audio_features.to_parquet('audio-features.parquet', engine='pyarrow', compression='snappy')
+
+    #s3에 저장
+    date_time = datetime.utcnow().strftime('%Y-%m-%d') # UTC 기준 현재 시간으로. "2020-03-23" 형태
+    object = S3.Object(Buket_name, 'audio-features/dt={}/audio_features.parquet'.format(date_time)) # 새로운 폴더(파티션)가 생성이 되는 것
+    data = open('audio-features.parquet', 'rb')
+    object.put(Body=data)
+    print("audio s3에 저장 ")
 
 
 
