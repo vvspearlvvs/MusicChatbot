@@ -67,10 +67,11 @@ def toptrack_s3(artist_result,headers):
                 # 해당 위치에 데이터가 없으면 False를 리턴(bool type). 이럴 경우 다음 컬럼으로 넘어감
                 if type(value) == bool:
                     continue
-                top_track.update({k: value}) # path(v)에 맞게 API에서 찾아 그 위치의 value를 가져옴
+                top_track.update({k: value[0]}) #필드값이 []형태가 아니라, string으로 받기 위해 value[0]
                 top_track.update({'artist_id': artist_id}) # key 값을 위해 아티스트 id도 넣어줌
-
             top_tracks.append(top_track)
+
+        print('top tracks')
         print(top_tracks)
         return top_tracks
 
@@ -83,12 +84,11 @@ def audio_s3(tracks_batch,headers):
 
         r = requests.get(URL, headers=headers)
         raw = json.loads(r.text) # audio_features는 flat한 구조라, raw data를 그대로 저장하면 됨.
-        print(raw)
         #audio_features 데이터는 nested 구조 없이 각 item들이 key-value 형식으로 되어 있음
         audio_features.extend(raw['audio_features'])
         # append와 extend 차이: extend는 리스트를 통째로 넣는 게 아니고, 리스트의 각 요소를 넣어 줌
         # [].extend([a,b,c]) -> [[a,b,c]]가 아니고 [a,b,c]가 됨
-    #print(audio_features)
+    print(audio_features)
     return audio_features
 
 
@@ -115,7 +115,7 @@ def main():
     artist_result = cursor.fetchall()
     #dict형태->dataframe형태 ->parquet형태
     top_tracks = toptrack_s3(artist_result,headers)
-    track_ids = [track['track_id'][0] for track in top_tracks] # jsonpath 사용하면 ['id'] 형태로 저장 -> [0]으로 벗겨야 함
+    track_ids = [track['track_id'] for track in top_tracks] # jsonpath 사용해 [0]형태로 이미 넣었다.
     top_tracks = pd.DataFrame(top_tracks)
     top_tracks.to_parquet('top-tracks.parquet', engine='pyarrow', compression='snappy') #top-tracks.parquet 파일 떨굼
 
