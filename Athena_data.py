@@ -63,7 +63,23 @@ def get_query_result(query_id,Athena):
 
     return response
 
+def process_data(result):
+    data = result['ResultSet']
+    columns = [col['VarCharValue'] for col in data['Rows'][0]['Data']]
+    print(columns)
 
+    listed_results = []
+    for row in data['Rows'][1:]: # 행별로 저장
+        values = []
+        for col in row['Data']:
+            try:
+                values.append(col['VarCharValue']) # 각 칼럼의 값들이 {'VarCharValue': value} 형식
+            except: # null일 경우?
+                values.append('')
+        print(values)
+        listed_results.append(dict(zip(columns, values)))
+
+    return listed_results
 
 
 def main():
@@ -108,7 +124,7 @@ def main():
         speechiness double,
         valence double,
         tempo double,
-        track_id string
+        id string
         ) partitioned by (dt string)
         stored as parquet location 's3://{}/audio-features/' 
         tblproperties("parquet.compress" = "snappy")
@@ -123,9 +139,10 @@ def main():
             #print(result)
             print('audio_features partition update!') # 신규 파티션 생성
 
+
     #아티스트별 평균수치 계싼
-    query = '''
-            SELECT
+    query = """
+        SELECT
             artist_id,
             avg(danceability) as danceability,
             avg(energy) as energy,
@@ -136,20 +153,53 @@ def main():
         FROM
             top_tracks t1
         JOIN
-            audio_features t2 on t2.track_id = t1.track_id
+            audio_features t2 on t2.id = t1.track_id
         WHERE
             t1.dt = (select max(dt) from top_tracks)
             and t2.dt = (select max(dt) from audio_features)
         GROUP BY
             t1.artist_id
-    '''
-
+        """
     r = query_athena(query, Athena)
 
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
         result = get_query_result(r['QueryExecutionId'], Athena)
+        print('아티스트평균-데이터프로세싱 전 ') #join 결과
         print(result)
-        print('join result') #join 결과
+        artists=process_data(result)
+        print('아티스트평균-데이터프로세싱 후 ') #join 결과
+        print(artists)
+
+
+    # 정규화 위해 수치별 최대, 최소값 계산. 가장 최근 날짜 데이터 사용
+    query = """
+        SELECT
+            MIN(danceability) AS danceability_min,
+            MAX(danceability) AS danceability_max,
+            MIN(energy) AS energy_min,
+            MAX(energy) AS energy_max,
+            MIN(loudness) AS loudness_min,
+            MAX(loudness) AS loudness_max,
+            MIN(speechiness) AS speechiness_min,
+            MAX(speechiness) AS speechiness_max,
+            ROUND(MIN(acousticness),4) AS acousticness_min,
+            MAX(acousticness) AS acousticness_max,
+            MIN(instrumentalness) AS instrumentalness_min,
+            MAX(instrumentalness) AS instrumentalness_max
+        FROM
+            audio_features
+        WHERE
+            dt = (select max(dt) from audio_features)
+    """
+    r = query_athena(query, Athena)
+    result = get_query_result(r['QueryExecutionId'], Athena)
+    print('최대최소-데이터프로세싱 전 ') #join 결과
+    print(result)
+    avgs = process_data(result)[0]
+    print('최대최소-데이터프로세싱 후 ') #join 결과
+    print(avgs)
+
+
 
 if __name__=='__main__':
     main()
