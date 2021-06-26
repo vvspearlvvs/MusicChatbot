@@ -4,6 +4,8 @@ import logging,sys
 import time,math
 from datetime import datetime
 
+import pandas as pd
+
 ACCESS_KEY = ''
 SECRET_KEY = ''
 
@@ -81,10 +83,8 @@ def process_data(result):
 
     return listed_results
 
-
-def main():
-
-    #top_track table query
+def query1():
+    #q1. top_track 테이블생성 쿼리
     query = """
         create external table if not exists top_tracks(
         track_id string,
@@ -106,9 +106,10 @@ def main():
         if r['ResponseMetadata']['HTTPStatusCode'] == 200:
             result = get_query_result(r['QueryExecutionId'], Athena)
             #print(result) # 파티션 생성 결과
-            print('top_tracks partition update!') # 신규 파티션 생성
+            #print('top_tracks partition update!') # 신규 파티션 생성
 
-    #audio table query
+def query2():
+    #q2. audio 테이블생성 쿼리
     query = """
         create external table if not exists audio_features(
         duration_ms int,
@@ -137,10 +138,10 @@ def main():
         if r['ResponseMetadata']['HTTPStatusCode'] == 200:
             result = get_query_result(r['QueryExecutionId'], Athena)
             #print(result)
-            print('audio_features partition update!') # 신규 파티션 생성
+            #print('audio_features partition update!') # 신규 파티션 생성
 
-
-    #아티스트별 평균수치 계싼
+def query3():
+    #q3. 아티스트별 평균 음악수치 계산쿼리
     query = """
         SELECT
             artist_id,
@@ -164,14 +165,15 @@ def main():
 
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
         result = get_query_result(r['QueryExecutionId'], Athena)
-        print('아티스트평균-데이터프로세싱 전 ') #join 결과
-        print(result)
-        artists=process_data(result)
-        print('아티스트평균-데이터프로세싱 후 ') #join 결과
-        print(artists)
+        #print('아티스트평균-데이터프로세싱 전 ') #join 결과
+        #print(result)
+        artists=process_data(result)[0]
+        #print('아티스트평균-데이터프로세싱 후 ') #join 결과
+        #print(artists)
+        return artists
 
-
-    # 정규화 위해 수치별 최대, 최소값 계산. 가장 최근 날짜 데이터 사용
+def query4():
+    #q4. 정규화 위한  음악수치별 최대,최소 계산쿼리 (가장 최근 날짜 데이터 사용)
     query = """
         SELECT
             MIN(danceability) AS danceability_min,
@@ -193,12 +195,74 @@ def main():
     """
     r = query_athena(query, Athena)
     result = get_query_result(r['QueryExecutionId'], Athena)
-    print('최대최소-데이터프로세싱 전 ') #join 결과
-    print(result)
+    #print('최대최소-데이터프로세싱 전 ') #join 결과
+    #print(result)
     avgs = process_data(result)[0]
-    print('최대최소-데이터프로세싱 후 ') #join 결과
-    print(avgs)
+    #print('최대최소-데이터프로세싱 후 ') #join 결과
+    #print(avgs)
+    return avgs
 
+def normalize(x, x_min, x_max):
+    #정규화 계산 함수
+    normalized = (x-x_min) / (x_max-x_min)
+    return normalized
+
+
+def insert_row(cursor, data, table):
+    # mysql의 table에 데이터 insert 하는 함수
+    placeholders = ', '.join(['%s'] * len(data))
+    columns = ', '.join(data.keys())
+    key_placeholders = ', '.join(['{0}=%s'.format(k) for k in data.keys()])
+    # 기본적으로 insert 하되, 키가 같으면 update
+    sql = "INSERT INTO %s ( %s ) VALUES ( %s ) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
+    cursor.execute(sql, list(data.values())*2) # *2: values()와 on duplicate key update에 값이 중복되어 들어가기 때문에, 2번 사용
+
+def main():
+    query1()
+    print('top_tracks partition update!')
+    query2()
+    print('audio_features partition update!')
+    artists = query3()
+    #artists= {'artist_id': '3Nrfpe0tUJi4K4DXYWgMUX', 'danceability': '0.6548', 'energy': '0.7163', 'loudness': '-5.243599999999999', 'speechiness': '0.07351999999999999', 'acousticness': '0.137286', 'instrumentalness': '0.0'}
+    print('아티스트평균-데이터프로세싱 후 ') #join 결과
+    avgs = query4()
+    #avgs={'danceability_min': '0.499', 'danceability_max': '0.787', 'energy_min': '0.459', 'energy_max': '0.862', 'loudness_min': '-6.755', 'loudness_max': '-4.333', 'speechiness_min': '0.0338', 'speechiness_max': '0.134', 'acousticness_min': '0.0032', 'acousticness_max': '0.42', 'instrumentalness_min': '0', 'instrumentalness_max': '0'}
+    print('최대최소-데이터프로세싱 후 ') #join 결과
+
+    metrics = ['danceability', 'energy', 'loudness', 'speechiness', 'acousticness', 'instrumentalness']
+
+    for i in range(len(artists)):
+        data = [] # 일단 다 넣고, 정렬해서 최소 거리인 5개를 sql에 넣기
+
+        others = artists.copy() # temp: 자기 자신 뺀 것.
+        mine = others.pop(i) # mine: 자기 자신.
+        for other in others:
+            dist = 0
+            for m in metrics:
+                # mine과 other 간 거리 계산
+                x = float(mine[m])
+                x_norm = normalize(x, float(avgs[m + '_min']), float(avgs[m + '_max']))
+                y = float(other[m])
+                y_norm = normalize(y, float(avgs[m + '_min']), float(avgs[m + '_max']))
+                dist += math.sqrt((x_norm - y_norm)**2)
+
+            if dist != 0:
+                temp = {
+                    'mine_artist': mine['artist_id'],
+                    'other_artist': other['artist_id'],
+                    'distance': dist
+                }
+                data.append(temp)
+        print(data)
+        # 아티스트별로 가까운 5개만 MySQL에 삽입
+        # 날짜는 삽입 시점의 timestamp로 넣도록 테이블에서 설정해 놓았으므로, 신경 쓰지 않아도 됨
+        data = sorted(data, key=lambda x: x['distance'])[:5]
+        for d in data:
+            insert_row(cursor, d, 'related_artists')
+
+    conn.commit()
+    cursor.close()
+    print('related_artists 테이블 삽입 완료!')
 
 
 if __name__=='__main__':
