@@ -68,7 +68,7 @@ def get_query_result(query_id,Athena):
 def process_data(result):
     data = result['ResultSet']
     columns = [col['VarCharValue'] for col in data['Rows'][0]['Data']]
-    print(columns)
+    #print(columns)
 
     listed_results = []
     for row in data['Rows'][1:]: # 행별로 저장
@@ -78,7 +78,7 @@ def process_data(result):
                 values.append(col['VarCharValue']) # 각 칼럼의 값들이 {'VarCharValue': value} 형식
             except: # null일 경우?
                 values.append('')
-        print(values)
+        #print(values)
         listed_results.append(dict(zip(columns, values)))
 
     return listed_results
@@ -119,7 +119,7 @@ def query2():
         acousticness double,
         danceability double,
         energy double,
-        instrumentalness int,
+        instrumentalness double,
         liveness double,
         loudness double,
         speechiness double,
@@ -167,7 +167,7 @@ def query3():
         result = get_query_result(r['QueryExecutionId'], Athena)
         #print('아티스트평균-데이터프로세싱 전 ') #join 결과
         #print(result)
-        artists=process_data(result)[0]
+        artists=process_data(result)
         #print('아티스트평균-데이터프로세싱 후 ') #join 결과
         #print(artists)
         return artists
@@ -223,19 +223,21 @@ def main():
     query2()
     print('audio_features partition update!')
     artists = query3()
-    #artists= {'artist_id': '3Nrfpe0tUJi4K4DXYWgMUX', 'danceability': '0.6548', 'energy': '0.7163', 'loudness': '-5.243599999999999', 'speechiness': '0.07351999999999999', 'acousticness': '0.137286', 'instrumentalness': '0.0'}
+    #artists=[{'artist_id': '2hcsKca6hCfFMwwdbFvenJ', 'danceability': '0.5997', 'energy': '0.8335000000000001', 'loudness': '-3.6572000000000005', 'speechiness': '0.0659', 'acousticness': '0.26591000000000004', 'instrumentalness': '1.23E-6'}]
     print('아티스트평균-데이터프로세싱 후 ') #join 결과
+    print(artists)
     avgs = query4()
-    #avgs={'danceability_min': '0.499', 'danceability_max': '0.787', 'energy_min': '0.459', 'energy_max': '0.862', 'loudness_min': '-6.755', 'loudness_max': '-4.333', 'speechiness_min': '0.0338', 'speechiness_max': '0.134', 'acousticness_min': '0.0032', 'acousticness_max': '0.42', 'instrumentalness_min': '0', 'instrumentalness_max': '0'}
+    #avgs={'danceability_min': '0.409', 'danceability_max': '0.741', 'energy_min': '0.736', 'energy_max': '0.959', 'loudness_min': '-5.775', 'loudness_max': '-1.414', 'speechiness_min': '0.0345', 'speechiness_max': '0.131', 'acousticness_min': '0.004', 'acousticness_max': '0.65', 'instrumentalness_min': '0.0', 'instrumentalness_max': '1.23E-5'}
     print('최대최소-데이터프로세싱 후 ') #join 결과
+    print(avgs)
 
     metrics = ['danceability', 'energy', 'loudness', 'speechiness', 'acousticness', 'instrumentalness']
 
     for i in range(len(artists)):
         data = [] # 일단 다 넣고, 정렬해서 최소 거리인 5개를 sql에 넣기
 
-        others = artists.copy() # temp: 자기 자신 뺀 것.
-        mine = others.pop(i) # mine: 자기 자신.
+        others = artists.copy()
+        mine=others.pop(i)
         for other in others:
             dist = 0
             for m in metrics:
@@ -253,10 +255,10 @@ def main():
                     'distance': dist
                 }
                 data.append(temp)
-        print(data)
         # 아티스트별로 가까운 5개만 MySQL에 삽입
         # 날짜는 삽입 시점의 timestamp로 넣도록 테이블에서 설정해 놓았으므로, 신경 쓰지 않아도 됨
         data = sorted(data, key=lambda x: x['distance'])[:5]
+        print(data) #자기자신은 뺴야함
         for d in data:
             insert_row(cursor, d, 'related_artists')
 
