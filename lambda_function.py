@@ -64,11 +64,16 @@ def insert_row(cursor,data,table):
 #    print(data.values())
 
 #Carousl 메세지
-def response_carousl(listcard_item):
+def response_carousl(name,listcard_item):
     return {
         "version": "2.0",
         "template": {
             "outputs": [
+                {
+                    "simpleText": {
+                        "text": name+"과 유사한 아티스트의 노래입니다."
+                    }
+                },
                 {
                     "carousel": {
                         "type": "listCard",
@@ -80,15 +85,14 @@ def response_carousl(listcard_item):
     }
 
 # ListCard 메시지
-def list_card(track_result):
-    #name = track_result[0]['name']
-    #youtube_url = 'https://www.youtube.com/results?search_query={}'.format(name.replace(' ', '+'))
+def list_card(track_result,other_name,dist):
+    youtube_url = 'https://www.youtube.com/results?search_query={}'.format(other_name.replace(' ', '+'))
 
 #3.list 카드형 : 아티스트의
     return {
         "listCard": {
             "header": {
-                "title": "Name의 최근노래 입니다"
+                "title": other_name+ "(유사도: "+str(dist)+")"
             },
             # get_top_tracks는 아티스트의 id를 이용하여 DynamoDB나 API에서 해당 아티스트의 탑 트랙을 찾는 함수
             # ListCard 형태에 맞게 리턴
@@ -97,7 +101,7 @@ def list_card(track_result):
                 {
                     "label": "Youtube에서 검색하기",
                     "action": "webLink",
-                    "webLinkUrl": "https://www.naver.com"
+                    "webLinkUrl": youtube_url
                 }
             ]
         }
@@ -274,9 +278,9 @@ def get_toptracks_db(id):
                 "web": track['track_url'] #스포티파이링크
             }
         }
-        temp={"name":track['artist_name'],"item":temp_dic}
-
+        items.append(track['artist_name'])
         items.append(temp_dic)
+    print("listcard에 넣는 아이템")
 
     return items
 
@@ -302,14 +306,18 @@ def lambda_handler(event):
         track_result=get_toptracks_db(id)
 
         #2.검색한 아티스트와 유사한 음악추천(음악정보가 Dynamodb에서 가져옴)
-        select_query="SELECT other_artist from related_artists where mine_artist ='{}' order by distance desc limit 3".format(id)
+        select_query="SELECT other_artist,artist_name,distance " \
+                     "from related_artists join artists " \
+                     "on related_artists.other_artist = artists.artist_id " \
+                     "where mine_artist ='{}' order by distance desc limit 3".format(id)
         cursor.execute(select_query)
         related_result = cursor.fetchall()
         print(related_result) #(('3HqSLMAZ3g3d5poNaI7GOU',), ('0XATRDCYuuGhk0oE7C0o5G',), ('5TnQc2N1iKlFjYD7CPGvFc',), ('4Kxlr1PRlDKEB0ekOCyHgX',), ('7f4ignuCJhLXfZ9giKT7rH',))
 
+
         list_card_list=[]
         for related in related_result:
-            other_id =related[0]
+            other_id,other_name,dist = related[0],related[1],related[2]
             print("추천 아티스트")
             print(other_id)
 
@@ -317,7 +325,7 @@ def lambda_handler(event):
             print("추천아티스트의 노래정보")
             print(related_track_result) #list
 
-            list_card_item = list_card(related_track_result)
+            list_card_item = list_card(related_track_result,other_name,dist)
             print("listcard리턴값 ")
             print(list_card_item)
             #음악추천결과 메세지 만들기
