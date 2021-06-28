@@ -63,6 +63,46 @@ def insert_row(cursor,data,table):
     cursor.execute(sql, list(data.values()))
 #    print(data.values())
 
+#Carousl 메세지
+def response_carousl(listcard_item):
+    return {
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                {
+                    "carousel": {
+                        "type": "listCard",
+                        "items": listcard_item
+                    }
+                }
+            ]
+        }
+    }
+
+# ListCard 메시지
+def list_card(track_result):
+    #name = track_result[0]['name']
+    #youtube_url = 'https://www.youtube.com/results?search_query={}'.format(name.replace(' ', '+'))
+
+#3.list 카드형 : 아티스트의
+    return {
+        "listCard": {
+            "header": {
+                "title": "Name의 최근노래 입니다"
+            },
+            # get_top_tracks는 아티스트의 id를 이용하여 DynamoDB나 API에서 해당 아티스트의 탑 트랙을 찾는 함수
+            # ListCard 형태에 맞게 리턴
+            "items": track_result,
+            "buttons": [
+                {
+                    "label": "Youtube에서 검색하기",
+                    "action": "webLink",
+                    "webLinkUrl": "https://www.naver.com"
+                }
+            ]
+        }
+    }
+
 
 #카톡챗봇 메세지 형식 함수
 def response_select(name,followers,popularity,artist_url,image_url,track_result):
@@ -234,24 +274,11 @@ def get_toptracks_db(id):
                 "web": track['track_url'] #스포티파이링크
             }
         }
+        temp={"name":track['artist_name'],"item":temp_dic}
 
         items.append(temp_dic)
 
     return items
-
-def invoke_lambda(fxn_name, payload, invocation_type = 'Event'):
-    # invocation_type -> 'Event': 비동기, 'RequestResponse': 동기
-    lambda_client = boto3.client('lambda')
-    invoke_response = lambda_client.invoke(
-        FunctionName = fxn_name,
-        InvocationType = invocation_type,
-        Payload = json.dumps(payload)
-    )
-
-    if invoke_response['StatusCode'] not in [200, 202, 204]:
-        logging.error('ERROR: Invoking lambda function: {} failed'.format(fxn_name))
-    return invoke_response
-
 
 
 def lambda_handler(event):
@@ -274,32 +301,36 @@ def lambda_handler(event):
         id,name,followers,popularity,artist_url,image_url = artist_result[0]
         track_result=get_toptracks_db(id)
 
-        #2.검색한 아티스트와 유사한 음악추천(음악정보가 Dynamodb에서 가져옴
-        #invoke?
-        payload={'artist_name': name, 'artist_id': id}
-        lambda_client = boto3.client('lambda')
-        invoke_response = lambda_client.invoke(
-            FunctionName = 'relatedmusic-kakaochat',
-            Payload = json.dumps(payload)
-        )
-        responseFromChild = json.load(invoke_response['Payload'])
-        print("invoke 결과 ")
-        print(responseFromChild)
-
-
+        #2.검색한 아티스트와 유사한 음악추천(음악정보가 Dynamodb에서 가져옴)
         select_query="SELECT other_artist from related_artists where mine_artist ='{}' order by distance desc limit 3".format(id)
         cursor.execute(select_query)
         related_result = cursor.fetchall()
         print(related_result) #(('3HqSLMAZ3g3d5poNaI7GOU',), ('0XATRDCYuuGhk0oE7C0o5G',), ('5TnQc2N1iKlFjYD7CPGvFc',), ('4Kxlr1PRlDKEB0ekOCyHgX',), ('7f4ignuCJhLXfZ9giKT7rH',))
 
+        list_card_list=[]
         for related in related_result:
             other_id =related[0]
+            print("추천 아티스트")
             print(other_id)
-            #음악추천결과 메세지 만들기
 
+            related_track_result = get_toptracks_db(other_id)
+            print("추천아티스트의 노래정보")
+            print(related_track_result) #list
+
+            list_card_item = list_card(related_track_result)
+            print("listcard리턴값 ")
+            print(list_card_item)
+            #음악추천결과 메세지 만들기
+            list_card_list.append(list_card_item['listCard'])
+
+        print("추천아티스트 전체의 노래정보")
+        print(list_card_list)
+
+        print("최종")
+        message = response_carousl(list_card_list)
 
         #아티스트검색결과 메세지
-        message = response_select(name,followers,popularity,artist_url,image_url,track_result)
+        #message = response_select(name,followers,popularity,artist_url,image_url,track_result)
 
     #db에 없는 아티스트일경우,'
     else:
@@ -402,7 +433,7 @@ event={
         "domainName":"mp9dovesu7.execute-api.ap-northeast-2.amazonaws.com",
         "apiId":"mp9dovesu7"
     },
-    "body":"{\"bot\":{\"id\":\"60b628c87e223a78e8750a68!\",\"name\":\"스포티파이 검색 봇\"},\"intent\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \",\"extra\":{\"reason\":{\"code\":1,\"message\":\"OK\"}}},\"action\":{\"id\":\"60bc72c24e460e6c6be02a11\",\"name\":\"API Gateway Server\",\"params\":{\"group\":\"bts\"},\"detailParams\":{\"group\":{\"groupName\":\"\",\"origin\":\"bts\",\"value\":\"bts\"}},\"clientExtra\":{}},\"userRequest\":{\"block\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \"},\"user\":{\"id\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"type\":\"botUserKey\",\"properties\":{\"botUserKey\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"isFriend\":true,\"plusfriendUserKey\":\"cCFcsmWzskCa\",\"bot_user_key\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"plusfriend_user_key\":\"cCFcsmWzskCa\"}},\"utterance\":\"BTS\",\"params\":{\"surface\":\"Kakaotalk.plusfriend\"},\"lang\":\"ko\",\"timezone\":\"Asia/Seoul\"},\"contexts\":[]}",
+    "body":"{\"bot\":{\"id\":\"60b628c87e223a78e8750a68!\",\"name\":\"스포티파이 검색 봇\"},\"intent\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \",\"extra\":{\"reason\":{\"code\":1,\"message\":\"OK\"}}},\"action\":{\"id\":\"60bc72c24e460e6c6be02a11\",\"name\":\"API Gateway Server\",\"params\":{\"group\":\"bts\"},\"detailParams\":{\"group\":{\"groupName\":\"\",\"origin\":\"bts\",\"value\":\"bts\"}},\"clientExtra\":{}},\"userRequest\":{\"block\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \"},\"user\":{\"id\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"type\":\"botUserKey\",\"properties\":{\"botUserKey\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"isFriend\":true,\"plusfriendUserKey\":\"cCFcsmWzskCa\",\"bot_user_key\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"plusfriend_user_key\":\"cCFcsmWzskCa\"}},\"utterance\":\"bts\",\"params\":{\"surface\":\"Kakaotalk.plusfriend\"},\"lang\":\"ko\",\"timezone\":\"Asia/Seoul\"},\"contexts\":[]}",
     "isBase64Encoded":'false'
 }
 lambda_handler(event)
