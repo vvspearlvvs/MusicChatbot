@@ -239,6 +239,18 @@ def get_toptracks_db(id):
 
     return items
 
+def invoke_lambda(fxn_name, payload, invocation_type = 'Event'):
+    # invocation_type -> 'Event': 비동기, 'RequestResponse': 동기
+    lambda_client = boto3.client('lambda')
+    invoke_response = lambda_client.invoke(
+        FunctionName = fxn_name,
+        InvocationType = invocation_type,
+        Payload = json.dumps(payload)
+    )
+
+    if invoke_response['StatusCode'] not in [200, 202, 204]:
+        logging.error('ERROR: Invoking lambda function: {} failed'.format(fxn_name))
+    return invoke_response
 
 
 
@@ -263,6 +275,17 @@ def lambda_handler(event):
         track_result=get_toptracks_db(id)
 
         #2.검색한 아티스트와 유사한 음악추천(음악정보가 Dynamodb에서 가져옴
+        #invoke?
+        payload={'artist_name': name, 'artist_id': id}
+        lambda_client = boto3.client('lambda')
+        invoke_response = lambda_client.invoke(
+            FunctionName = 'relatedmusic-kakaochat',
+            Payload = json.dumps(payload)
+        )
+        responseFromChild = json.load(invoke_response['Payload'])
+        print("invoke 결과 ")
+        print(responseFromChild)
+
 
         select_query="SELECT other_artist from related_artists where mine_artist ='{}' order by distance desc limit 3".format(id)
         cursor.execute(select_query)
