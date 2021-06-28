@@ -10,9 +10,12 @@ from boto3.dynamodb.conditions import Key,Attr
 client_id = ""
 client_secret = ""
 
+ACCESS_KEY = ''
+SECRET_KEY = ''
+
 rds_host ='localhost' #RDS로 변경시 Public endpoint
 rds_user ='root' #RDS로 변경시 admin
-rds_pwd = 'qwer1234'
+rds_pwd = ''
 rds_db = 'musicdb'
 
 conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
@@ -20,6 +23,8 @@ cursor = conn.cursor()
 
 dynamodb = boto3.resource(
     'dynamodb',
+    aws_access_key_id=ACCESS_KEY,
+    aws_secret_access_key=SECRET_KEY,
     region_name='ap-northeast-2'
     )
 table=dynamodb.Table('artist_toptracks') #dynanoDB 파티션키 : track_id
@@ -206,6 +211,7 @@ def get_toptracks(artist_id,artist_name,headers):
         table.put_item(Item=data)
 
     print("insert dynamodb 성공")
+    print(data)
 
 def get_toptracks_db(id):
     #dynanoDB 파티션키 : track_id
@@ -234,7 +240,9 @@ def get_toptracks_db(id):
     return items
 
 
-def lambda_handler(event,context):
+
+
+def lambda_handler(event):
 
     # 메시지 내용은 request의 ['body']에 들어 있음
     request_body = json.loads(event['body'])
@@ -243,23 +251,40 @@ def lambda_handler(event,context):
     #group = request_body['action']['params']['group'] # 그룹아티스트 파라미터
     input_artist = request_body['userRequest']['utterance']
 
+    #1.아티스트검색
     #DB에 있으면,mysql에 검색
     select_query="SELECT * from artists where artist_name ='{}'".format(input_artist)
     cursor.execute(select_query)
     artist_result = cursor.fetchall()
 
-    #db에 있는 아티스트일경우, select결과 리턴
+    #db에 있는 아티스트일경우, select결과 리턴 -> top_track 아티스트 가져오기
     if len(artist_result)>0:
         id,name,followers,popularity,artist_url,image_url = artist_result[0]
         track_result=get_toptracks_db(id)
-        #메세지
+
+        #2.검색한 아티스트와 유사한 음악추천(음악정보가 Dynamodb에서 가져옴
+
+        select_query="SELECT other_artist from related_artists where mine_artist ='{}' order by distance desc limit 3".format(id)
+        cursor.execute(select_query)
+        related_result = cursor.fetchall()
+        print(related_result) #(('3HqSLMAZ3g3d5poNaI7GOU',), ('0XATRDCYuuGhk0oE7C0o5G',), ('5TnQc2N1iKlFjYD7CPGvFc',), ('4Kxlr1PRlDKEB0ekOCyHgX',), ('7f4ignuCJhLXfZ9giKT7rH',))
+
+        for related in related_result:
+            other_id =related[0]
+            print(other_id)
+            #음악추천결과 메세지 만들기
+
+
+        #아티스트검색결과 메세지
         message = response_select(name,followers,popularity,artist_url,image_url,track_result)
 
-    #db에 없는 아티스트일경우,
+    #db에 없는 아티스트일경우,'
     else:
         message=response_insert()
         artist_id = get_artist(input_artist,get_header())
         get_toptracks(artist_id,input_artist,get_header())
+
+
 
     print("최종전송 msg")
     print(message)
@@ -271,3 +296,90 @@ def lambda_handler(event,context):
             'Access-Control-Allow-Origin': '*',
         }
     }
+
+event={
+    "resource":"/music-kakaobot",
+    "path":"/music-kakaobot",
+    "httpMethod":"POST",
+    "headers":{
+        "accept":"*/*",
+        "Content-Type":"application/json",
+        "Host":"mp9dovesu7.execute-api.ap-northeast-2.amazonaws.com",
+        "User-Agent":"AHC/2.1",
+        "X-Amzn-Trace-Id":"Root=1-60ccd0a3-79b8389864d8d89733cea76a",
+        "X-Chappie-Footprint":"chp-9e46d5a9714d40f78c28bd8a5aa90c12",
+        "X-Forwarded-For":"219.249.231.40",
+        "X-Forwarded-Port":"443",
+        "X-Forwarded-Proto":"https",
+        "X-Request-Id":"chp-9e46d5a9714d40f78c28bd8a5aa90c12"
+    },
+    "multiValueHeaders":{
+        "accept":[
+            "*/*"
+        ],
+        "Content-Type":[
+            "application/json"
+        ],
+        "Host":[
+            "mp9dovesu7.execute-api.ap-northeast-2.amazonaws.com"
+        ],
+        "User-Agent":[
+            "AHC/2.1"
+        ],
+        "X-Amzn-Trace-Id":[
+            "Root=1-60ccd0a3-79b8389864d8d89733cea76a"
+        ],
+        "X-Chappie-Footprint":[
+            "chp-9e46d5a9714d40f78c28bd8a5aa90c12"
+        ],
+        "X-Forwarded-For":[
+            "219.249.231.40"
+        ],
+        "X-Forwarded-Port":[
+            "443"
+        ],
+        "X-Forwarded-Proto":[
+            "https"
+        ],
+        "X-Request-Id":[
+            "chp-9e46d5a9714d40f78c28bd8a5aa90c12"
+        ]
+    },
+    "queryStringParameters":"None",
+    "multiValueQueryStringParameters":"None",
+    "pathParameters":"None",
+    "stageVariables":"None",
+    "requestContext":{
+        "resourceId":"hmv0y7",
+        "resourcePath":"/music-kakaobot",
+        "httpMethod":"POST",
+        "extendedRequestId":"BIWJiH8KIE0FrQw=",
+        "requestTime":"18/Jun/2021:16:58:11 +0000",
+        "path":"/default/music-kakaobot",
+        "accountId":"129329859727",
+        "protocol":"HTTP/1.1",
+        "stage":"default",
+        "domainPrefix":"mp9dovesu7",
+        "requestTimeEpoch":1624035491217,
+        "requestId":"21687fa2-b634-4994-a688-a83629cc892d",
+        "identity":{
+            "cognitoIdentityPoolId":"None",
+            "accountId":"None",
+            "cognitoIdentityId":"None",
+            "caller":"None",
+            "sourceIp":"219.249.231.40",
+            "principalOrgId":"None",
+            "accessKey":"None",
+            "cognitoAuthenticationType":"None",
+            "cognitoAuthenticationProvider":"None",
+            "userArn":"None",
+            "userAgent":"AHC/2.1",
+            "user":"None"
+        },
+        "domainName":"mp9dovesu7.execute-api.ap-northeast-2.amazonaws.com",
+        "apiId":"mp9dovesu7"
+    },
+    "body":"{\"bot\":{\"id\":\"60b628c87e223a78e8750a68!\",\"name\":\"스포티파이 검색 봇\"},\"intent\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \",\"extra\":{\"reason\":{\"code\":1,\"message\":\"OK\"}}},\"action\":{\"id\":\"60bc72c24e460e6c6be02a11\",\"name\":\"API Gateway Server\",\"params\":{\"group\":\"bts\"},\"detailParams\":{\"group\":{\"groupName\":\"\",\"origin\":\"bts\",\"value\":\"bts\"}},\"clientExtra\":{}},\"userRequest\":{\"block\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \"},\"user\":{\"id\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"type\":\"botUserKey\",\"properties\":{\"botUserKey\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"isFriend\":true,\"plusfriendUserKey\":\"cCFcsmWzskCa\",\"bot_user_key\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"plusfriend_user_key\":\"cCFcsmWzskCa\"}},\"utterance\":\"BTS\",\"params\":{\"surface\":\"Kakaotalk.plusfriend\"},\"lang\":\"ko\",\"timezone\":\"Asia/Seoul\"},\"contexts\":[]}",
+    "isBase64Encoded":'false'
+}
+lambda_handler(event)
