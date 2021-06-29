@@ -7,7 +7,6 @@ import logging
 from datetime import datetime
 import jsonpath
 import pandas as pd
-#pip install pyarrow
 
 client_id = ""
 client_secret = ""
@@ -24,12 +23,10 @@ try:
     conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
     cursor = conn.cursor()
 
-    dynamodb = boto3.resource('dynamodb',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
-    table=dynamodb.Table('artist_toptracks') #dynanoDB 파티션키 : track_id
 except:
-    logging.error('could not connect to rds or dynamodb')
+    logging.error('Database Connect Error')
 
-S3= boto3.resource('s3',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
+S3= boto3.client('s3',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
 Buket_name = "musicdatalake"
 
 #Spotify API연결을 위한 Token을 가져옴
@@ -90,9 +87,9 @@ def toptrack_s3(artist_result,headers):
 def audio_s3(tracks_batch,headers):
     audio_features = []
 
-    for i in tracks_batch:
-        ids = ','.join(i) #track id
-        URL = "https://api.spotify.com/v1/audio-features/?ids={}".format(ids)
+    for batch in tracks_batch:
+        track_id = ','.join(batch) #track id
+        URL = "https://api.spotify.com/v1/audio-features/?ids={}".format(track_id)
 
         r = requests.get(URL, headers=headers)
         raw = json.loads(r.text) # audio_features는 flat한 구조라, raw data를 그대로 저장하면 됨.
@@ -101,8 +98,9 @@ def audio_s3(tracks_batch,headers):
         # print(raw)
 
         # instrumentalness 타입통일(float)
-        for item in raw['audio_features']:
-            item['instrumentalness']=float(item['instrumentalness'])
+
+        for tmp in raw['audio_features']:
+            tmp['instrumentalness']=float(tmp['instrumentalness'])
         audio_features.extend(raw['audio_features']) # append : [[audio데이터, audio데이터]], extend : [audio데이터, audio데이터]
 
     return audio_features
@@ -116,34 +114,34 @@ def main():
     cursor.execute("Select artist_id,artist_name from artists")
     artist_result = cursor.fetchall()  # ('3HqSLMAZ3g3d5poNaI7GOU', 'IU'), ('3Nrfpe0tUJi4K4DXYWgMUX', 'BTS')
 
-    # dict형태 -> dataframe형태 -> parquet형태
+    # dict형태->dataframe형태->parquet형태
     top_tracks_dict = toptrack_s3(artist_result,headers)
     top_tracks = pd.DataFrame(top_tracks_dict)
-    top_tracks.to_parquet('Test-Batch/top-tracks.parquet', engine='pyarrow', compression='snappy') #top-tracks.parquet 파일생성
-    track_ids = [track['track_id'] for track in top_tracks_dict]
+    top_tracks.to_parquet('Test-Batch/top-tracks.parquet', engine='pyarrow', compression='snappy')
 
     # parquet형태의 top_track 데이터 s3에 저장
-    date_time = datetime.utcnow().strftime('%Y-%m-%d')
-    s3_object = S3.Object(Buket_name, 'top-tracks/dt={}/top_tracks.parquet'.format(date_time)) # dt로 자동 파티션 생성
     data = open('Test-Batch/top-tracks.parquet', 'rb')
-    s3_object.put(Body=data)
+    date_time = datetime.utcnow().strftime('%Y-%m-%d')
+    S3.put_object(Body=data,Bucket=Buket_name,Key='top-tracks/dt={}/top_tracks.parquet'.format(date_time))
     logging.info("top track s3에 저장완료")
 
-    #아티스트당 최소 10개의 노래정보가 있어서 100개씩 묶어서 audio 데이터
-    tracks_batch = [track_ids[i: i+100] for i in range(0, len(track_ids), 100)]
+    # 아티스트당 최소 10개의 노래정보가 있어서 track_id를 100개씩 묶어서 처리
+    track_ids = [track['track_id'] for track in top_tracks_dict]
+    if len(track_ids)>100:
+        tracks_batch = [track_ids[i: i+100] for i in range(0, len(track_ids), 100)]
+    else:
+        tracks_batch = [track_ids] #100개 이하, len(tracks_batch) = 1
 
     # dict형태->dataframe형태 ->parquet형태
-    audio_features = audio_s3(tracks_batch,headers)
-    audio_features = pd.DataFrame(audio_features)
+    audio_features_dict = audio_s3(tracks_batch,headers)
+    audio_features = pd.DataFrame(audio_features_dict)
     audio_features.to_parquet('Test-Batch/audio-features.parquet', engine='pyarrow', compression='snappy')
 
-    #parquet형태의 audio 데이터 s3에 저장
-    date_time = datetime.utcnow().strftime('%Y-%m-%d') # UTC 기준 현재 시간으로. "2020-03-23" 형태
-    object = S3.Object(Buket_name, 'audio-features/dt={}/audio_features.parquet'.format(date_time)) # 새로운 폴더(파티션)가 생성이 되는 것
+    # parquet형태의 audio 데이터 s3에 저장
     data = open('Test-Batch/audio-features.parquet', 'rb')
-    object.put(Body=data)
+    date_time = datetime.utcnow().strftime('%Y-%m-%d')
+    S3.put_object(Body=data,Bucket=Buket_name,Key='audio-features/dt={}/audio_features.parquet'.format(date_time))
     logging.info("audio s3에 저장 ")
-
 
 
 if __name__=='__main__':
