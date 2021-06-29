@@ -21,49 +21,77 @@ rds_db = 'musicdb'
 conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
 cursor = conn.cursor()
 
-dynamodb = boto3.resource(
-    'dynamodb',
-    aws_access_key_id=ACCESS_KEY,
-    aws_secret_access_key=SECRET_KEY,
-    region_name='ap-northeast-2'
-    )
+dynamodb = boto3.resource('dynamodb',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
 table=dynamodb.Table('artist_toptracks') #dynanoDB 파티션키 : track_id
 
-#Spotify API연결을 위한 Token을 가져옴
-def get_header():
-    endpoint = "https://accounts.spotify.com/api/token"
+# 1차테스트 메세지 : DB에 있는 기존 아티스트 노래정보
+# BasicCard타입과 ListCard타입 메세지
+def response_select(name,followers,popularity,artist_url,image_url,track_result):
+    youtube_url = 'https://www.youtube.com/results?search_query={}'.format(name.replace(' ', '+'))
+    result={
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                #BasicCard타입 : 아티스트정보 (이름,followers,이미지,Spotify음악URL)
+                {
+                    "basicCard": {
+                        "title": name,
+                        "description": "followers: "+str(followers)+", popularity: "+str(popularity),
+                        "thumbnail": {
+                            "imageUrl": image_url
+                        },
+                        "buttons": [
+                            {
+                                "action":  "webLink",
+                                "label": "Spotify에서 검색하기",
+                                "webLinkUrl": artist_url
+                            }
 
-    encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
-    headers = {"Authorization": "Basic {}".format(encoded)}
-    payload = {"grant_type": "client_credentials"}
-    response = requests.post(endpoint, data=payload, headers=headers)
-    access_token = json.loads(response.text)['access_token']
-    headers = {"Authorization": "Bearer  {}".format(access_token)}
+                        ]
+                    }
+                },
+                #ListCard타입: 아티스트 노래정보 (노래이름, 발매일, 이미지)
+                {
+                    "listCard": {
+                        "header": {
+                            "title": name+"의 노래를 찾았습니다"
+                        },
+                        #track_result는 아티스트의 id를 이용하여 DynamoDB에서 노래정보를 select한 get_top_track의 리턴값
+                        "items": track_result,
+                        "buttons": [
+                            {
+                                "label": "Youtube에서 검색하기",
+                                "action": "webLink",
+                                "webLinkUrl": youtube_url
+                            }
+                        ]
+                    }
+                },
 
-    return headers
+            ]
+        }
+    }
+    return result
 
-#아티스트 이름으로 검색 : search API 사용
-def insert_row(cursor,data,table):
-    #mysql insert
+# 1차테스트 메세지 : DB에 없는 새로운 아티스트
+# SimpleText타입
+def response_insert():
+    result = {
+        "version": "2.0",
+        "template": {
+            "outputs": [
+                {
+                    "simpleText": {
+                        "text": "새로운 아티스트를 저장했습니다!"
+                    }
+                }
+            ]
+        }
+    }
+    return result
 
-    #data의 개수에 맞게 넣어 줌
-    placeholders = ', '.join(['%s'] * len(data)) # 형태: '%s, %s, %s, ...'
-    columns = ', '.join(data.keys())
-    key_placeholders = ', '.join(['{0}=values({0})'.format(k) for k in data.keys()])
-
-    sql = "INSERT INTO %s ( %s ) VALUES ( %s ) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
-
-    #print(sql) # 아래와 같은 형태
-    '''
-    INSERT INTO artists ( artist_id, artist_name, followers, popularity, artist_url, image_url )
-    VALUES ( %s, %s, %s, %s, %s, %s )
-    ON DUPLICATE KEY UPDATE artist_id=values(artist_id), artist_name=values(artist_name), followers=values(followers),
-    popularity=values(popularity), artist_url=values(artist_url), image_url=values(image_url)
-    '''
-    cursor.execute(sql, list(data.values()))
-#    print(data.values())
-
-#Carousl 메세지
+# 2차테스트 메세지 : 유사한 아티스트의 노래정보
+# Carousl타입 메세지
 def response_carousl(name,listcard_item):
     return {
         "version": "2.0",
@@ -84,11 +112,9 @@ def response_carousl(name,listcard_item):
         }
     }
 
-# ListCard 메시지
+# ListCard타입 메세지
 def list_card(track_result,other_name,dist):
     youtube_url = 'https://www.youtube.com/results?search_query={}'.format(other_name.replace(' ', '+'))
-
-#3.list 카드형 : 아티스트의
     return {
         "listCard": {
             "header": {
@@ -108,71 +134,39 @@ def list_card(track_result,other_name,dist):
     }
 
 
-#카톡챗봇 메세지 형식 함수
-def response_select(name,followers,popularity,artist_url,image_url,track_result):
-    youtube_url = 'https://www.youtube.com/results?search_query={}'.format(name.replace(' ', '+'))
-    result={
-        "version": "2.0",
-        "template": {
-            "outputs": [
-                #2.basic 카드형 : DB에 있는 아티스트 입력했을 때 메세지
-                {
-                    "basicCard": {
-                        "title": name,
-                        "description": "followers: "+str(followers)+", popularity: "+str(popularity),
-                        "thumbnail": {
-                            "imageUrl": image_url
-                        },
-                        "buttons": [
-                            {
-                                "action":  "webLink",
-                                "label": "Spotify에서 검색하기",
-                                "webLinkUrl": artist_url
-                            }
+# Spotify API연결을 위한 Token을 가져옴
+def get_header():
+    endpoint = "https://accounts.spotify.com/api/token"
 
-                        ]
-                    }
-                },
-                #3.list 카드형 : 아티스트의
-                {
-                    "listCard": {
-                        "header": {
-                            "title": name+"의 노래를 찾았습니다"
-                        },
-                        # get_top_tracks는 아티스트의 id를 이용하여 DynamoDB나 API에서 해당 아티스트의 탑 트랙을 찾는 함수
-                        # ListCard 형태에 맞게 리턴
-                        "items": track_result,
-                        "buttons": [
-                            {
-                                "label": "Youtube에서 검색하기",
-                                "action": "webLink",
-                                "webLinkUrl": youtube_url
-                            }
-                        ]
-                    }
-                },
+    encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
+    headers = {"Authorization": "Basic {}".format(encoded)}
+    payload = {"grant_type": "client_credentials"}
+    response = requests.post(endpoint, data=payload, headers=headers)
+    access_token = json.loads(response.text)['access_token']
+    headers = {"Authorization": "Bearer  {}".format(access_token)}
 
-            ]
-        }
-    }
-    return result
+    return headers
 
-#1.simple text형식 : DB에 없는 아티스트 입력했을 때 메세지
-def response_insert():
-    result = {
-        "version": "2.0",
-        "template": {
-            "outputs": [
-                {
-                    "simpleText": {
-                        "text": "오! 새로운 아티스트인걸?! ㄴ저장ㄱ 다시검색 해보세요"
-                    }
-                }
-            ]
-        }
-    }
-    return result
+# 아티스트 이름으로 검색 : search API 사용
+def insert_row(cursor,data,table):
 
+    #data의 개수에 맞게 넣어 줌
+    placeholders = ', '.join(['%s'] * len(data)) # 형태: '%s, %s, %s, ...'
+    columns = ', '.join(data.keys())
+    key_placeholders = ', '.join(['{0}=values({0})'.format(k) for k in data.keys()])
+
+    sql = "INSERT INTO %s ( %s ) VALUES ( %s ) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
+
+    #print(sql) # 아래와 같은 형태
+    '''
+    INSERT INTO artists ( artist_id, artist_name, followers, popularity, artist_url, image_url )
+    VALUES ( %s, %s, %s, %s, %s, %s )
+    ON DUPLICATE KEY UPDATE artist_id=values(artist_id), artist_name=values(artist_name), followers=values(followers),
+    popularity=values(popularity), artist_url=values(artist_url), image_url=values(image_url)
+    '''
+    cursor.execute(sql, list(data.values()))
+
+# 스포티파이(search API)를 통해 아티스트 정보 수집,변형,RDS 저장
 def get_artist(artist_name,headers):
     endpoint = "https://api.spotify.com/v1/search"
 
@@ -204,14 +198,14 @@ def get_artist(artist_name,headers):
         'followers' : artist_item['followers']['total'],
         'artist_url' : artist_item['external_urls']['spotify'],
         'image_url' : artist_item['images'][0]['url'],
-        #'genres' : artist_item['genres']
     }
     insert_row(cursor,artist_data,'artists')
     conn.commit()
-    print("insert mysql 성공")
+    print("신규 아티스트정보 insert RDS 성공")
 
     return artist_data['artist_id']
 
+# 스포티파이(top-tracks API)를 통해 아티스트 음악정보 수집,변형,Dynamodb 저장
 def get_toptracks(artist_id,artist_name,headers):
     endpoint = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
 
@@ -231,9 +225,7 @@ def get_toptracks(artist_id,artist_name,headers):
         else:
             logging.error(json.loads(artist_t.text))
 
-    #return artist_tr
-    #dynamodb작업-artistAPI 정상적으로 가져온 경우
-
+    #Dynamodb작업
     for track in artist_tr['tracks']:
         data={
             'artist_id':artist_id,
@@ -251,25 +243,20 @@ def get_toptracks(artist_id,artist_name,headers):
                  }
 
         }
-        #data.update(track)
         table.put_item(Item=data)
 
-    print("insert dynamodb 성공")
-    print(data)
+    print("신규 아티스트의 음악정보 insert dynamodb 성공")
 
+# DynamoDB에서 아티스트 음악정보 쿼리
 def get_toptracks_db(id):
-    #dynanoDB 파티션키 : track_id
-    #track_result=table.query(KeyConditionExpression=Key('artist_id').eq(id))
+    #select_result=table.query(KeyConditionExpression=Key('artist_id').eq(id))
     select_result = table.scan(FilterExpression = Attr('artist_id').eq(id))
-    #print(track_result)
 
     #최근 발매된 앨범순으로 정렬
     select_result['Items'].sort(key=lambda x: x['album']['release_date'], reverse=True)
     items = []
-    #최근 발매된 3개만
-    for track in select_result['Items'][:3]:
-
-        # ListCard 형태에 맞게 리턴
+    for track in select_result['Items'][:3]: #최근 발매된 3개의 데이터만 가져오기
+        # ListCard의 item형태에 맞게 변형
         temp_dic = {
             "title": track['track_name'], #타이틀곡명
             "description": track['album']['release_date'], #발매일
@@ -280,7 +267,6 @@ def get_toptracks_db(id):
         }
         items.append(track['artist_name'])
         items.append(temp_dic)
-    print("listcard에 넣는 아이템")
 
     return items
 
@@ -289,67 +275,53 @@ def lambda_handler(event):
 
     # 메시지 내용은 request의 ['body']에 들어 있음
     request_body = json.loads(event['body'])
-    print(request_body)
+    input_artist = request_body['userRequest']['utterance'] #사용자가 입력한 아티스트명
 
-    #group = request_body['action']['params']['group'] # 그룹아티스트 파라미터
-    input_artist = request_body['userRequest']['utterance']
-
-    #1.아티스트검색
-    #DB에 있으면,mysql에 검색
+    # 1.아티스트 DB조회
     select_query="SELECT * from artists where artist_name ='{}'".format(input_artist)
     cursor.execute(select_query)
     artist_result = cursor.fetchall()
 
-    #db에 있는 아티스트일경우, select결과 리턴 -> top_track 아티스트 가져오기
+    # 1-1.기존 아티스트일 경우 -> 검색한 아티스트의 기본정보 및 음악정보 전달
     if len(artist_result)>0:
         id,name,followers,popularity,artist_url,image_url = artist_result[0]
-        track_result=get_toptracks_db(id)
+        track_result=get_toptracks_db(id) # 검색한 아티스트id기준 Dynamodb결과
+        logging.info("기존 아티스트의 음악정보 결과")
+        logging.info(track_result)
+        # 1차 테스트결과. 검색한 아티스트의 기본정보 및 음악정보 메세지 전송
+        #message = response_select(name,followers,popularity,artist_url,image_url,track_result)
 
-        #2.검색한 아티스트와 유사한 음악추천(음악정보가 Dynamodb에서 가져옴)
+        # 2.검색한 아티스트와 유사한 아티스트 음악정보 조회
         select_query="SELECT other_artist,artist_name,distance " \
                      "from related_artists join artists " \
                      "on related_artists.other_artist = artists.artist_id " \
-                     "where mine_artist ='{}' order by distance desc limit 3".format(id)
+                     "where mine_artist ='{}' " \
+                     "order by distance desc " \
+                     "limit 3".format(id)
         cursor.execute(select_query)
         related_result = cursor.fetchall()
-        print(related_result) #(('3HqSLMAZ3g3d5poNaI7GOU',), ('0XATRDCYuuGhk0oE7C0o5G',), ('5TnQc2N1iKlFjYD7CPGvFc',), ('4Kxlr1PRlDKEB0ekOCyHgX',), ('7f4ignuCJhLXfZ9giKT7rH',))
-
 
         list_card_list=[]
         for related in related_result:
-            other_id,other_name,dist = related[0],related[1],related[2]
-            print("추천 아티스트")
-            print(other_id)
+            other_id,other_name,dist = related[0],related[1],related[2] # 추천아티스트id,이름,유사도
+            related_track_result = get_toptracks_db(other_id) # 추천 아티스트id 기준 Dynamodb결과
+            logging.info("추천 아티스트의 음악정보 결과")
+            logging.info(related_track_result)
 
-            related_track_result = get_toptracks_db(other_id)
-            print("추천아티스트의 노래정보")
-            print(related_track_result) #list
+            list_card_item = list_card(related_track_result,other_name,dist) # 리스트카드 메세지
+            list_card_list.append(list_card_item['listCard']) #리스트카드 메세지들의 리스트 케로셀 타입 메세지
 
-            list_card_item = list_card(related_track_result,other_name,dist)
-            print("listcard리턴값 ")
-            print(list_card_item)
-            #음악추천결과 메세지 만들기
-            list_card_list.append(list_card_item['listCard'])
-
-        print("추천아티스트 전체의 노래정보")
-        print(list_card_list)
-
-        print("최종")
+        # 2차 테스트결과. 검색한 아티스트와 유사한 아티스의 음악정보 메세지 전송
         message = response_carousl(list_card_list)
 
-        #아티스트검색결과 메세지
-        #message = response_select(name,followers,popularity,artist_url,image_url,track_result)
-
-    #db에 없는 아티스트일경우,'
+    #1-2. 신규 아티스트일 경우
     else:
         message=response_insert()
         artist_id = get_artist(input_artist,get_header())
         get_toptracks(artist_id,input_artist,get_header())
 
-
-
-    print("최종전송 msg")
-    print(message)
+    logging.info("카카오 챗봇에게 전송하는 최종메세지")
+    logging.info(message)
 
     return {
         'statusCode':200,
@@ -359,6 +331,7 @@ def lambda_handler(event):
         }
     }
 
+#local환경에서 테스트를 위한 lambda event
 event={
     "resource":"/music-kakaobot",
     "path":"/music-kakaobot",
