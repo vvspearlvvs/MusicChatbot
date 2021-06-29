@@ -27,7 +27,7 @@ except:
     logging.error('Database Connect Error')
 
 S3= boto3.client('s3',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
-Buket_name = "musicdatalake"
+Bucket_name = "musicdatalake"
 
 #Spotify API연결을 위한 Token을 가져옴
 def get_header(client_id, client_secret):
@@ -122,7 +122,7 @@ def main():
     # parquet형태의 top_track 데이터 s3에 저장
     data = open('Test-Batch/top-tracks.parquet', 'rb')
     date_time = datetime.utcnow().strftime('%Y-%m-%d')
-    S3.put_object(Body=data,Bucket=Buket_name,Key='top-tracks/dt={}/top_tracks.parquet'.format(date_time))
+    S3.put_object(Body=data,Bucket=Bucket_name,Key='top-tracks/dt={}/top_tracks.parquet'.format(date_time))
     logging.info("top track s3에 저장완료")
 
     # 아티스트당 최소 10개의 노래정보가 있어서 track_id를 100개씩 묶어서 처리
@@ -140,7 +140,7 @@ def main():
     # parquet형태의 audio 데이터 s3에 저장
     data = open('Test-Batch/audio-features.parquet', 'rb')
     date_time = datetime.utcnow().strftime('%Y-%m-%d')
-    S3.put_object(Body=data,Bucket=Buket_name,Key='audio-features/dt={}/audio_features.parquet'.format(date_time))
+    S3.put_object(Body=data,Bucket=Bucket_name,Key='audio-features/dt={}/audio_features.parquet'.format(date_time))
     logging.info("audio s3에 저장 ")
 
 

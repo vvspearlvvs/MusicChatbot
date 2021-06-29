@@ -150,23 +150,23 @@ def get_header():
 
     return headers
 
-# 아티스트 이름으로 검색 : search API 사용
+# 신규 아티스트 정보를 mysql에 insert하는 함수
 def insert_row(cursor,data,table):
 
-    #data의 개수에 맞게 넣어 줌
-    placeholders = ', '.join(['%s'] * len(data)) # 형태: '%s, %s, %s, ...'
-    columns = ', '.join(data.keys())
-    key_placeholders = ', '.join(['{0}=values({0})'.format(k) for k in data.keys()])
-
-    sql = "INSERT INTO %s ( %s ) VALUES ( %s ) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
-
-    #print(sql) # 아래와 같은 형태
+    # sql 쿼리문은 아래와 같은 형태
     '''
     INSERT INTO artists ( artist_id, artist_name, followers, popularity, artist_url, image_url )
     VALUES ( %s, %s, %s, %s, %s, %s )
     ON DUPLICATE KEY UPDATE artist_id=values(artist_id), artist_name=values(artist_name), followers=values(followers),
     popularity=values(popularity), artist_url=values(artist_url), image_url=values(image_url)
     '''
+
+    placeholders = ', '.join(['%s'] * len(data)) # %s, %s, %s, %s, %s, %s
+    columns = ', '.join(data.keys())
+    key_placeholders = ', '.join(['{0}=values({0})'.format(k) for k in data.keys()])
+
+    sql = "INSERT INTO %s ( %s ) VALUES ( %s ) ON DUPLICATE KEY UPDATE %s" % (table, columns, placeholders, key_placeholders)
+
     cursor.execute(sql, list(data.values()))
 
 # 스포티파이(search API)를 통해 아티스트 정보 수집,변형,RDS 저장
