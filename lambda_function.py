@@ -13,16 +13,19 @@ client_secret = ""
 ACCESS_KEY = ''
 SECRET_KEY = ''
 
-rds_host ='localhost' #RDS로 변경시 Public endpoint
-rds_user ='root' #RDS로 변경시 admin
+rds_host ='localhost' #RDS: endpoint
+rds_user ='root' #RDS: admin
 rds_pwd = ''
 rds_db = 'musicdb'
 
-conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
-cursor = conn.cursor()
+try:
+    conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
+    cursor = conn.cursor()
 
-dynamodb = boto3.resource('dynamodb',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
-table=dynamodb.Table('artist_toptracks') #dynanoDB 파티션키 : track_id
+    dynamodb = boto3.resource('dynamodb',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
+    table=dynamodb.Table('artist_toptracks') #dynanoDB 파티션키 : track_id
+except:
+    logging.error('could not connect to rds or dynamodb')
 
 # 1차테스트 메세지 : DB에 있는 기존 아티스트 노래정보
 # BasicCard타입과 ListCard타입 메세지
@@ -201,7 +204,7 @@ def get_artist(artist_name,headers):
     }
     insert_row(cursor,artist_data,'artists')
     conn.commit()
-    print("신규 아티스트정보 insert RDS 성공")
+    logging.info("신규 아티스트정보 RDS insert완료")
 
     return artist_data['artist_id']
 
@@ -245,7 +248,7 @@ def get_toptracks(artist_id,artist_name,headers):
         }
         table.put_item(Item=data)
 
-    print("신규 아티스트의 음악정보 insert dynamodb 성공")
+    logging.info("신규 아티스트의 음악정보 dynamodb insert완료")
 
 # DynamoDB에서 아티스트 음악정보 쿼리
 def get_toptracks_db(id):
