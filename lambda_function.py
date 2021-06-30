@@ -137,19 +137,6 @@ def list_card(track_result,other_name,dist):
     }
 
 
-# Spotify API연결을 위한 Token을 가져옴
-def get_header():
-    endpoint = "https://accounts.spotify.com/api/token"
-
-    encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
-    headers = {"Authorization": "Basic {}".format(encoded)}
-    payload = {"grant_type": "client_credentials"}
-    response = requests.post(endpoint, data=payload, headers=headers)
-    access_token = json.loads(response.text)['access_token']
-    headers = {"Authorization": "Bearer  {}".format(access_token)}
-
-    return headers
-
 # 신규 아티스트 정보를 mysql에 insert하는 함수
 def insert_row(cursor,data,table):
 
@@ -169,24 +156,41 @@ def insert_row(cursor,data,table):
 
     cursor.execute(sql, list(data.values()))
 
-# 스포티파이(search API)를 통해 아티스트 정보 수집,변형,RDS 저장
-def get_artist(artist_name,headers):
-    endpoint = "https://api.spotify.com/v1/search"
+# Spotify API연결을 위한 Token을 가져옴
+def get_header():
+    endpoint = "https://accounts.spotify.com/api/token"
 
+    encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
+    headers = {"Authorization": "Basic {}".format(encoded)}
+    payload = {"grant_type": "client_credentials"}
+    response = requests.post(endpoint, data=payload, headers=headers)
+    access_token = json.loads(response.text)['access_token']
+    headers = {"Authorization": "Bearer  {}".format(access_token)}
+
+    return headers
+
+# 스포티파이(search API)를 통해 아티스트 정보 수집,변형,RDS 저장
+def get_artist_api(artist_name,headers):
+    endpoint = "https://api.spotify.com/v1/search"
     query_params = {'q':artist_name,'type':'artist','limit':'1'}
 
     search_r=requests.get(endpoint,params=query_params,headers=headers)
     search_ar=json.loads(search_r.text)
 
-    #spotifyAPI check
+    # spotifyAPI 호출 예외처리 check
     if search_r.status_code!=200:
         logging.error(json.loads(search_r.text))
-        if search_r.status_code == 429: #too much request
+
+        # too much request일 경우, retry-After 시간(초)만큼 대기 후 재요청
+        if search_r.status_code == 429:
             retry_afer = json.loads(search_r.headers)['retry-After']
             time.sleep(int(retry_afer))
             search_r=requests.get(endpoint,params=query_params,headers=headers)
+
+        # API 인증키 만료일 경우, token다시 가져옴
         elif search_r.code==401: #get token again
             search_r=requests.get(endpoint,params=query_params,headers=headers)
+        # 이외의 예외상황
         else:
             logging.error(json.loads(search_r.text))
 
@@ -209,7 +213,7 @@ def get_artist(artist_name,headers):
     return artist_data['artist_id']
 
 # 스포티파이(top-tracks API)를 통해 아티스트 음악정보 수집,변형,Dynamodb 저장
-def get_toptracks(artist_id,artist_name,headers):
+def get_toptracks_api(artist_id,artist_name,headers):
     endpoint = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
 
     query_params = {'market':'KR'}
@@ -217,14 +221,20 @@ def get_toptracks(artist_id,artist_name,headers):
     artist_t=requests.get(endpoint,params=query_params,headers=headers)
     artist_tr=json.loads(artist_t.text)
 
+    # spotifyAPI 호출 예외처리 check
     if artist_t.status_code!=200:
         logging.error(json.loads(artist_t.text))
-        if artist_t.status_code == 429: #too much request
+
+        # too much request일 경우, retry-After 시간(초)만큼 대기 후 재요청
+        if artist_t.status_code == 429:
             retry_afer = json.loads(artist_t.headers)['retry-After']
             time.sleep(int(retry_afer))
             search_r=requests.get(endpoint,params=query_params,headers=headers)
-        elif artist_t.code==401: #get token again
+
+        # API 인증키 만료일 경우, token다시 가져옴
+        elif artist_t.code==401:
             search_r=requests.get(endpoint,params=query_params,headers=headers)
+        # 이외의 예외상황
         else:
             logging.error(json.loads(artist_t.text))
 
@@ -320,8 +330,8 @@ def lambda_handler(event):
     #1-2. 신규 아티스트일 경우
     else:
         message=response_insert()
-        artist_id = get_artist(input_artist,get_header())
-        get_toptracks(artist_id,input_artist,get_header())
+        artist_id = get_artist_api(input_artist,get_header())
+        get_toptracks_api(artist_id,input_artist,get_header())
 
     logging.info("카카오 챗봇에게 전송하는 최종메세지")
     logging.info(message)

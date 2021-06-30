@@ -176,7 +176,7 @@ def query3():
 
         return artists
 
-# 4. 정규화 위한  음악수치별 최대,최소 계산쿼리 (가장 최근 날짜 데이터 사용)
+# 4. 정규화 위한 음악수치별 최대,최소 계산쿼리 (가장 최근 날짜 데이터 사용)
 def query4():
 
     query = """
@@ -269,7 +269,8 @@ def main():
                     'distance': dist
                 }
                 related_data.append(temp)
-        # 아티스트 사이의 거리가 가까운(유사도가 높은) 데이터 3개만 MySQL에 삽입
+
+        # 아티스트 사이의 거리가 가까운(유사도가 높은) 데이터 3개만 RDS(related_artists)에 삽입
         related_data = sorted(related_data, key=lambda x: x['distance'])[:3]
         # ex : [{A,B,0.6],{A,C,0.5},{A.D,0.2},{B,A,0.6},{B,C,0.2},{B,D,0.1}..{..생략..} }
         logging.info("아티스트간 유사도 계산 완료")

@@ -42,7 +42,7 @@ def get_header(client_id, client_secret):
 
     return headers
 
-#toptrack 정보를 S3에 저장
+#toptrack 정보를 flat한 형태로 변형하여 S3에 저장
 def toptrack_s3(artist_result,headers):
     # jsonpath 패키지 이용하여 계층적인 raw data에서 원하는 value들만 가져오도록 path 지정
     top_track_keys = {
@@ -58,6 +58,7 @@ def toptrack_s3(artist_result,headers):
     # 전체 아티스트의 음악정보 데이터
     top_track_list =[]
 
+    # Spotify API를 통해 top_tracks raw data 수집
     for artist_id,artist_name in artist_result:
         endpoint = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
 
@@ -68,18 +69,57 @@ def toptrack_s3(artist_result,headers):
 
         # top_tracks 데이터는 계층형 구조라 flat한 형태로 변형해서 S3에 저장해야한다.
         # print(raw)
+        # raw : "tracks":[
+        #      {
+        #          "id":"2zlgwqw8BLX2JGB76LIFeF",
+        #          "name":"Missing You",
+        #          "external_urls":{
+        #                "spotify":"https://open.spotify.com/track/2zlgwqw8BLX2JGB76LIFeF"
+        #          }
+        #          "album":{
+        #               "name":"Brother Act.",
+        #               "images":[
+        #                {
+        #                   "height":640,
+        #                   "url":"https://i.scdn.co/image/ab67616d0000b27317477a7434c66ac5548b6ab7",
+        #                   "width":640
+        #                },
+        #                {
+        #                   "height":300,
+        #                   "url":"https://i.scdn.co/image/ab67616d00001e0217477a7434c66ac5548b6ab7",
+        #                   "width":300
+        #                },
+        #                {
+        #                   "height":64,
+        #                   "url":"https://i.scdn.co/image/ab67616d0000485117477a7434c66ac5548b6ab7",
+        #                   "width":64
+        #                }
+        #                ],  {..생략..}
+        #           }, {..생략..}
+        #      } ]
 
         for track in raw['tracks']:
             # 하나의 아티스트에 대한 음악정보 데이터
-            top_track = {}
+            top_track_flat = {}
             for k, v in top_track_keys.items(): #k,v : track_id id -> track_name name
 
                 # jsonpath 패키지 이용하여 raw data에서 value path에 해당하는 value를 가져옴
                 value = jsonpath.jsonpath(track, v) # EX : ['track id값'] 또는 ['track 이름']
-                top_track.update({k: value[0]}) # string으로 받아 아티스트에 대한 음악정보 데이터 생성
-                top_track.update({'artist_id': artist_id}) # top_track api 결과에 없던 아티스트 id도 넣어줌
+                top_track_flat.update({k: value[0]}) # string으로 받아 아티스트에 대한 음악정보 데이터 생성
+                top_track_flat.update({'artist_id': artist_id}) # top_track api 결과에 없던 아티스트 id도 넣어줌
 
-            top_track_list.append(top_track) #EX : [{BTS 노래1..}, {BTS 노래2..}, {IU 노래1..}, {IU 노래2..}]
+            # flat한 형태로 변형한 결과
+            # print(top_track_flat)
+            # top_track_flat : {
+            #    "track_id":"2zlgwqw8BLX2JGB76LIFeF",
+            #    "artist_id":"2hcsKca6hCfFMwwdbFvenJ",
+            #    "track_name":"Missing You",
+            #    "popularity":62,
+            #    "external_url":"https://open.spotify.com/track/2zlgwqw8BLX2JGB76LIFeF",
+            #    "album_name":"Brother Act.",
+            #    "image_url":"https://i.scdn.co/image/ab67616d00001e0217477a7434c66ac5548b6ab7"
+            # }
+            top_track_list.append(top_track_flat)
 
     return top_track_list
 
@@ -110,7 +150,7 @@ def main():
 
     headers = get_header(client_id, client_secret)
 
-    #top_track 데이터
+    # 1.아티스트의 음악데이터(top_track)
     cursor.execute("Select artist_id,artist_name from artists")
     artist_result = cursor.fetchall()  # ('3HqSLMAZ3g3d5poNaI7GOU', 'IU'), ('3Nrfpe0tUJi4K4DXYWgMUX', 'BTS')
 
@@ -125,6 +165,7 @@ def main():
     S3.put_object(Body=data,Bucket=Bucket_name,Key='top-tracks/dt={}/top_tracks.parquet'.format(date_time))
     logging.info("top track s3에 저장완료")
 
+    # 2.음악메타데이터(audio_features)
     # 아티스트당 최소 10개의 노래정보가 있어서 track_id를 100개씩 묶어서 처리
     track_ids = [track['track_id'] for track in top_tracks_dict]
     if len(track_ids)>100:
