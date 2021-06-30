@@ -23,12 +23,15 @@ Spotify(음원서비스)API의 아티스트와 음원데이터를 이용하여 <
 - AWS Athena를 통해 유사도를 계산하고, Mysql에 저장하여 DataMart로 활용
 - 입력한 아티스트의 정보 뿐만 아니라 유사한 음악을 추천할 수 있는 Serverless 카카오톡 챗봇 서비스 개발
 
-### 아키텍쳐
+### 아키텍쳐  
+AWS API Gateway와 AWS Lambda기반의 Serverless 구조
 
 ![Untitled](https://user-images.githubusercontent.com/78723318/123921138-a845e300-d9c1-11eb-8426-ed4e4bc3c019.png)
+- 사용자가 챗봇에게 아티스트를 입력하면 API Gateway가 트리거가 되어 lambda 함수가 호출
+- 챗봇이 API Gateway를 거쳐 POST 방식으로 보낸 request 메세지를 lambda가 받아 처리한다.   
+- 사용자의 Request가 있을때만 동작하여 저렴한 비용으로 서비스 운영가능
+- 별도의 서버를 관리할 필요 없이 lambda에 코드작성 및 배포 <br>
 
-1. 사용자가 챗봇에 "아티스트명(예:BTS)"을 입력
-2. Spotify API로 아티스트의 정보와 발매일 기준 최근노래를 응답 
 
 ### 데이터파이프라인 
 ### lambda_function.py
@@ -43,20 +46,21 @@ Spotify API를 기반으로 데이터를 수집하고, 저장하여 카카오톡
 - artists 데이터는 AWS RDS, top_track 데이터는 AWS DynamoDB에 저장
 
 ### S3_Datalake.py
-데이터분석을 위한 raw data를 S3에 저장하는 로직처리 <br>
+raw data를 paruqet 포맷으로 압축하여 S3에 저장하는 로직처리 <br>
 
 ![Untitled (3)](https://user-images.githubusercontent.com/78723318/123921987-8ac54900-d9c2-11eb-998f-46ce5d1c4a64.png)
 
-- AWS RDS에 저장된 artist_id 로 Spotify API를 통해 아티스트의 음악데이터(top_track)와 음악메타데이터(audio) 수집
-- 컬럼기반 포맷인 paruqet형태로 데이터 변형 및  S3 저장 →  DataLake 구현
+- AWS RDS에 저장된 artist_id 로 Spotify API를 통해 raw data 수집
+- S3에 저장하기 위해 계층형 구조의 raw data를 flat하게 변형
+- paruqet 포맷으로 압축된 데이터를 S3 저장 →  DataLake 구현
 
 
 ### Athena_data.py
-S3에 저장된 데이터 Athena 쿼리수행 및 아티스트 간 유사도 계산, 결과를 RDS에 저장하는 로직처리 <br>
+Athena 쿼리수행 및 아티스트 간 유사도를 계산하여 RDS에 저장하는 로직처리 <br>
 
-  ![datamark](https://user-images.githubusercontent.com/78723318/123622799-a7894180-d847-11eb-85c4-7690b0feae9c.PNG)
+![캡처](https://user-images.githubusercontent.com/78723318/124017992-57b2a200-da22-11eb-8a14-51eca5b16202.PNG)
 
-- AWS Athena를 통해 S3에 저장된 아티스트의 음악데이터(top_track)와 음악메타데이터 쿼리수행
+- S3에 저장된 데이터를 대상으로 AWS Athena 쿼리를 수행하여 구조화된 데이터로 변환 
 - 아티스트별 평균 음악메타 데이터를 Euclidean Distance 알고리즘 기반으로 유사도 계산
 - 아티스트간의 거리가 가까운 (유사도가 높은) 아티스트를 RDS에 저장 → DataMart 구성
 

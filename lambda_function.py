@@ -27,7 +27,7 @@ try:
 except:
     logging.error('could not connect to rds or dynamodb')
 
-# 1차테스트 메세지 : DB에 있는 기존 아티스트 노래정보
+# 중간테스트 메세지 : DB에 있는 기존 아티스트 노래정보
 # BasicCard타입과 ListCard타입 메세지
 def response_select(name,followers,popularity,artist_url,image_url,track_result):
     youtube_url = 'https://www.youtube.com/results?search_query={}'.format(name.replace(' ', '+'))
@@ -76,7 +76,7 @@ def response_select(name,followers,popularity,artist_url,image_url,track_result)
     }
     return result
 
-# 1차테스트 메세지 : DB에 없는 새로운 아티스트
+# 중간테스트 메세지 : DB에 없는 새로운 아티스트
 # SimpleText타입
 def response_insert():
     result = {
@@ -93,7 +93,7 @@ def response_insert():
     }
     return result
 
-# 2차테스트 메세지 : 유사한 아티스트의 노래정보
+# 최종테스트 메세지 : 유사한 아티스트의 노래정보
 # Carousl타입 메세지
 def response_carousl(name,listcard_item):
     return {
@@ -163,6 +163,7 @@ def get_header():
     encoded = base64.b64encode("{}:{}".format(client_id, client_secret).encode('utf-8')).decode('ascii')
     headers = {"Authorization": "Basic {}".format(encoded)}
     payload = {"grant_type": "client_credentials"}
+    # POST방식으로 access_token을 요청
     response = requests.post(endpoint, data=payload, headers=headers)
     access_token = json.loads(response.text)['access_token']
     headers = {"Authorization": "Bearer  {}".format(access_token)}
@@ -174,10 +175,11 @@ def get_artist_api(artist_name,headers):
     endpoint = "https://api.spotify.com/v1/search"
     query_params = {'q':artist_name,'type':'artist','limit':'1'}
 
+    ## 헤더에 token을 넣은 get방식으로 메세지 요청
     search_r=requests.get(endpoint,params=query_params,headers=headers)
     search_ar=json.loads(search_r.text)
 
-    # spotifyAPI 호출 예외처리 check
+    ## 안정적인 데이터수집을 위한 API호출 예외처리
     if search_r.status_code!=200:
         logging.error(json.loads(search_r.text))
 
@@ -217,7 +219,7 @@ def get_toptracks_api(artist_id,artist_name,headers):
     endpoint = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
 
     query_params = {'market':'KR'}
-
+    # get방식으로 음악정보 request
     artist_t=requests.get(endpoint,params=query_params,headers=headers)
     artist_tr=json.loads(artist_t.text)
 
@@ -262,7 +264,7 @@ def get_toptracks_api(artist_id,artist_name,headers):
 
 # DynamoDB에서 아티스트 음악정보 쿼리
 def get_toptracks_db(id):
-    #select_result=table.query(KeyConditionExpression=Key('artist_id').eq(id))
+    # 파티션키가 아닌 컬럼으로 조회하기 위해 query 대신 scan사용
     select_result = table.scan(FilterExpression = Attr('artist_id').eq(id))
 
     #최근 발매된 앨범순으로 정렬
@@ -284,7 +286,7 @@ def get_toptracks_db(id):
     return items
 
 
-def lambda_handler(event):
+def lambda_handler(event,context):
 
     # 메시지 내용은 request의 ['body']에 들어 있음
     request_body = json.loads(event['body'])
@@ -301,16 +303,18 @@ def lambda_handler(event):
         track_result=get_toptracks_db(id) # 검색한 아티스트id기준 Dynamodb결과
         logging.info("기존 아티스트의 음악정보 결과")
         logging.info(track_result)
-        # 1차 테스트결과. 검색한 아티스트의 기본정보 및 음악정보 메세지 전송
+        # 중간 테스트결과. 검색한 아티스트의 기본정보 및 음악정보 메세지 전송
         #message = response_select(name,followers,popularity,artist_url,image_url,track_result)
 
-        # 2.검색한 아티스트와 유사한 아티스트 음악정보 조회
+        # 2.입력받은 아티스트와 유사한 아티스트 음악정보 조회
         select_query="SELECT other_artist,artist_name,distance " \
                      "from related_artists join artists " \
                      "on related_artists.other_artist = artists.artist_id " \
                      "where mine_artist ='{}' " \
                      "order by distance desc " \
                      "limit 3".format(id)
+        # 유사한 아티스트 이름을 뽑기 위해 join 수행
+        # artist : 입력받은 아티스트정보 테이블, related_artists : 아티스트간 유사도정보 테이블
         cursor.execute(select_query)
         related_result = cursor.fetchall()
 
@@ -324,7 +328,7 @@ def lambda_handler(event):
             list_card_item = list_card(related_track_result,other_name,dist) # 리스트카드 메세지
             list_card_list.append(list_card_item['listCard']) #리스트카드 메세지들의 리스트 케로셀 타입 메세지
 
-        # 2차 테스트결과. 검색한 아티스트와 유사한 아티스의 음악정보 메세지 전송
+        # 최종 테스트결과. 검색한 아티스트와 유사한 아티스의 음악정보 메세지 전송
         message = response_carousl(list_card_list)
 
     #1-2. 신규 아티스트일 경우

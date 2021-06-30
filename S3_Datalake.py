@@ -42,7 +42,7 @@ def get_header(client_id, client_secret):
 
     return headers
 
-#toptrack 정보를 flat한 형태로 변형하여 S3에 저장
+# toptrack 정보를 flat한 형태로 변형하여 S3에 저장
 def toptrack_s3(artist_result,headers):
     # jsonpath 패키지 이용하여 계층적인 raw data에서 원하는 value들만 가져오도록 path 지정
     top_track_keys = {
@@ -132,13 +132,19 @@ def audio_s3(tracks_batch,headers):
         URL = "https://api.spotify.com/v1/audio-features/?ids={}".format(track_id)
 
         r = requests.get(URL, headers=headers)
-        raw = json.loads(r.text) # audio_features는 flat한 구조라, raw data를 그대로 저장하면 됨.
+        raw = json.loads(r.text)
 
         # audio_features 데이터는 계층형 구조가 아닌 flat한 구조라 raw data를 그대로 s3에 저장한다.
         # print(raw)
+        # raw : {
+        #           "danceability":0.641,
+        #           "energy":0.807,
+        #           "instrumentalness":0,
+        #           "loudness":-4.016,
+        #           "mode":0,
+        #       }
 
         # instrumentalness 타입통일(float)
-
         for tmp in raw['audio_features']:
             tmp['instrumentalness']=float(tmp['instrumentalness'])
         audio_features.extend(raw['audio_features']) # append : [[audio데이터, audio데이터]], extend : [audio데이터, audio데이터]
@@ -154,7 +160,7 @@ def main():
     cursor.execute("Select artist_id,artist_name from artists")
     artist_result = cursor.fetchall()  # ('3HqSLMAZ3g3d5poNaI7GOU', 'IU'), ('3Nrfpe0tUJi4K4DXYWgMUX', 'BTS')
 
-    # dict형태->dataframe형태->parquet형태
+    # flat한 dict형태->dataframe형태->parquet포맷 압축
     top_tracks_dict = toptrack_s3(artist_result,headers)
     top_tracks = pd.DataFrame(top_tracks_dict)
     top_tracks.to_parquet('Test-Batch/top-tracks.parquet', engine='pyarrow', compression='snappy')
@@ -173,7 +179,7 @@ def main():
     else:
         tracks_batch = [track_ids] #100개 이하, len(tracks_batch) = 1
 
-    # dict형태->dataframe형태 ->parquet형태
+    # dict형태->dataframe형태 ->parquet포맷 압축
     audio_features_dict = audio_s3(tracks_batch,headers)
     audio_features = pd.DataFrame(audio_features_dict)
     audio_features.to_parquet('Test-Batch/audio-features.parquet', engine='pyarrow', compression='snappy')

@@ -80,7 +80,7 @@ def process_data(result):
 
 #1. top_track 테이블생성 쿼리
 def query1():
-
+    # S3에 있는 parquet 파일을 참고해 데이터를 추출하고,구조화된 데이터로변환
     query = """
         create external table if not exists top_tracks(
         track_id string,
@@ -239,14 +239,15 @@ def insert_row(cursor, data, table):
 
 def main():
     start_time = time.time()
-    query1()
-    query2()
-    artists = query3() # 아티스트별 평균 음악메타데이터 (ex : BTS 노래들의 평균 danceability)
-    avgs = query4() # 음악메타데이터의 min,max 값 (ex : 비트,템포같은 danceability의 MIN,MAX)
+    ## 쿼리수행
+    query1() # top_track (아티스트의 음악데이터) 테이블 생성 쿼리수행
+    query2() # Audio (음악메타데이터) 테이블 생성 쿼리수행
+    artists = query3() # 아티스트별 평균 음악메타데이터 쿼리결과 (ex : BTS 노래들의 평균 danceability)
+    avgs = query4() # 음악메타데이터의 min,max 값 쿼리결과(ex : 비트,템포같은 danceability의 MIN,MAX)
 
     metrics = ['danceability', 'energy', 'loudness', 'speechiness', 'acousticness', 'instrumentalness']
 
-    #유사도 계산
+    ## 유사도 계산 : 유클리드 거리계산 알고리즘 이용
     for i in range(len(artists)):
         related_data = []
 
@@ -257,7 +258,7 @@ def main():
         for other in others:
             dist = 0
             for m in metrics:
-                # 유사도 : mine의 정규화값과 other의 정규화값 사이의 거리
+                ## 유사도 : 입력한 아티스트(mine)의 정규화값과 유사 아티스트 후보(other)의 정규화값 사이의 거리
                 x_norm = normalize(float(mine[m]), float(avgs[m + '_min']), float(avgs[m + '_max']))
                 y_norm = normalize(float(other[m]), float(avgs[m + '_min']), float(avgs[m + '_max']))
                 dist += math.sqrt((x_norm - y_norm)**2)
@@ -270,13 +271,13 @@ def main():
                 }
                 related_data.append(temp)
 
-        # 아티스트 사이의 거리가 가까운(유사도가 높은) 데이터 3개만 RDS(related_artists)에 삽입
+        ## 유사도 Top3 추출 : 입력한 아티스트와 거리가 가장 가까운(유사도가 높은) 유사아티스트id RDS 저장
         related_data = sorted(related_data, key=lambda x: x['distance'])[:3]
         # ex : [{A,B,0.6],{A,C,0.5},{A.D,0.2},{B,A,0.6},{B,C,0.2},{B,D,0.1}..{..생략..} }
         logging.info("아티스트간 유사도 계산 완료")
 
         for data in related_data:
-            insert_row(cursor, data, 'related_artists')
+            insert_row(cursor, data, 'related_artists') # related_artists : 아티스트간 유사도정보 테이블
 
     conn.commit()
     cursor.close()
