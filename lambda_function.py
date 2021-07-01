@@ -5,7 +5,7 @@ import logging
 import time
 import pymysql
 import boto3
-from boto3.dynamodb.conditions import Key,Attr
+from boto3.dynamodb.conditions import Attr
 
 client_id = ""
 client_secret = ""
@@ -188,7 +188,6 @@ def get_artist_api(artist_name,headers):
             retry_afer = json.loads(search_r.headers)['retry-After']
             time.sleep(int(retry_afer))
             search_r=requests.get(endpoint,params=query_params,headers=headers)
-
         # API 인증키 만료일 경우, token다시 가져옴
         elif search_r.code==401: #get token again
             search_r=requests.get(endpoint,params=query_params,headers=headers)
@@ -196,10 +195,10 @@ def get_artist_api(artist_name,headers):
         else:
             logging.error(json.loads(search_r.text))
 
-    #RDS작업
+    # RDS작업
     artist_item= search_ar['artists']['items'][0]
 
-    #mysql에 insert row 저장
+    # mysql에 insert row 저장
     artist_data ={
         'artist_id' : artist_item['id'],
         'artist_name' : artist_item['name'],
@@ -219,11 +218,11 @@ def get_toptracks_api(artist_id,artist_name,headers):
     endpoint = "https://api.spotify.com/v1/artists/{}/top-tracks".format(artist_id)
 
     query_params = {'market':'KR'}
-    # get방식으로 음악정보 request
+    ## 헤더에 token을 넣은 get방식으로 메세지 요청
     artist_t=requests.get(endpoint,params=query_params,headers=headers)
     artist_tr=json.loads(artist_t.text)
 
-    # spotifyAPI 호출 예외처리 check
+    ## 안정적인 데이터수집을 위한 API호출 예외처리
     if artist_t.status_code!=200:
         logging.error(json.loads(artist_t.text))
 
@@ -232,7 +231,6 @@ def get_toptracks_api(artist_id,artist_name,headers):
             retry_afer = json.loads(artist_t.headers)['retry-After']
             time.sleep(int(retry_afer))
             search_r=requests.get(endpoint,params=query_params,headers=headers)
-
         # API 인증키 만료일 경우, token다시 가져옴
         elif artist_t.code==401:
             search_r=requests.get(endpoint,params=query_params,headers=headers)
@@ -286,6 +284,7 @@ def get_toptracks_db(id):
     return items
 
 
+## 사용자 -> "아티스트입력" -> 챗봇 -> body : "requst msg" -> API Gateway -> "트리거발생" -> Lambda 호출
 def lambda_handler(event,context):
 
     # 메시지 내용은 request의 ['body']에 들어 있음
@@ -297,10 +296,10 @@ def lambda_handler(event,context):
     cursor.execute(select_query)
     artist_result = cursor.fetchall()
 
-    # 1-1.기존 아티스트일 경우 -> 검색한 아티스트의 기본정보 및 음악정보 전달
+    # 1-1.기존 아티스트일 경우 -> 입력한 아티스트의 정보 전달
     if len(artist_result)>0:
         id,name,followers,popularity,artist_url,image_url = artist_result[0]
-        track_result=get_toptracks_db(id) # 검색한 아티스트id기준 Dynamodb결과
+        track_result=get_toptracks_db(id) # 아티스트id기준 Dynamodb결과
         logging.info("기존 아티스트의 음악정보 결과")
         logging.info(track_result)
         # 중간 테스트결과. 검색한 아티스트의 기본정보 및 음악정보 메세지 전송
@@ -311,8 +310,7 @@ def lambda_handler(event,context):
                      "from related_artists join artists " \
                      "on related_artists.other_artist = artists.artist_id " \
                      "where mine_artist ='{}' " \
-                     "order by distance desc " \
-                     "limit 3".format(id)
+                     "order by distance desc ".format(id)
         # 유사한 아티스트 이름을 뽑기 위해 join 수행
         # artist : 입력받은 아티스트정보 테이블, related_artists : 아티스트간 유사도정보 테이블
         cursor.execute(select_query)
@@ -331,11 +329,11 @@ def lambda_handler(event,context):
         # 최종 테스트결과. 검색한 아티스트와 유사한 아티스의 음악정보 메세지 전송
         message = response_carousl(list_card_list)
 
-    #1-2. 신규 아티스트일 경우
+    #1-2. 신규 아티스트일 경우 -> 스포티파이API를 통해 데이터수집 및 저장
     else:
         message=response_insert()
-        artist_id = get_artist_api(input_artist,get_header())
-        get_toptracks_api(artist_id,input_artist,get_header())
+        artist_id = get_artist_api(input_artist,get_header()) #아티스트정보 RDS 저장
+        get_toptracks_api(artist_id,input_artist,get_header()) #음악정보 DynamoDB 저장
 
     logging.info("카카오 챗봇에게 전송하는 최종메세지")
     logging.info(message)

@@ -1,22 +1,23 @@
-## 음악 챗봇서비스와 AWS 데이터파이프라인
+## 음악추천챗봇과 AWS 데이터파이프라인
 <hr>
 
 전체적인 진행과정은 블로그에서 확인할 수 있습니다: https://pearlluck.tistory.com/notice/572
 
 ### 개요
 Spotify(음원서비스)API의 아티스트와 음원데이터를 이용하여 <br>
-아티스트를 입력하면 유사한 아티스트와 노래를 추천해주는 카카오톡 챗봇 개발
+아티스트를 입력하면 유사한 아티스트의 노래를 추천해주는 Serverelss기반 카카오톡 챗봇 개발
 
 ### 프로젝트 기간 
 2021.05.30 ~ 20201.06.30
 
 ### 사용기술
 - Language : Python 3.6 <br>
-- DB : AWS RDS(MySQL), AWS DynamoDB, AWS S3, AWS Athena<br>
-- Infra : AWS Lambda, API Gateway<br>
-- API : Spotify API, Kakao i
+- DB : AWS RDS(MySQL), AWS DynamoDB, AWS S3<br>
+- Infra : AWS Lambda, API Gateway, AWS Athena<br>
+- API : 음악데이터(Spotify API), 카카오톡 챗봇(Kakao i)
 
 ### 수행역할 
+데이터 수집부터 저장과 처리 그리고 데이터분석까지 AWS를 사용하여 데이터파이프라인 개발
 - Python을 이용하여 Spotify API를 통해 아티스트의 데이터수집
 - 데이터 전처리 후 AWS RDS 및 AWS DynamoDB에 데이터저장 
 - raw 데이터와 Spotify의 음악메타데이터를 AWS S3에 저장하여 DataLake 구현
@@ -42,17 +43,17 @@ Spotify API를 기반으로 데이터를 수집하고, 저장하여 카카오톡
 
 
 - 기존 아티스트를 받았을 경우, DynamoDB와 RDS에서 데이터를 조회하여 카카오톡 메세지 형태로 응답
-- 신규 아티스트를 받았을 경우, Spotify API를 통해  관련 데이터 수집
-- artists 데이터는 AWS RDS, top_track 데이터는 AWS DynamoDB에 저장
+- 신규 아티스트를 받았을 경우, Spotify API를 통해 관련 데이터 수집 및 저장 
+- 예를 들어,아티스트 데이터(artists) AWS RDS, 아티스트의 음악정보 데이터(top_track) AWS DynamoDB
 
 ### S3_Datalake.py
-raw data를 paruqet 포맷으로 압축하여 S3에 저장하는 로직처리 <br>
+raw data를 parquet 포맷으로 압축하여 S3에 저장하는 로직처리 <br>
 
 ![Untitled (3)](https://user-images.githubusercontent.com/78723318/123921987-8ac54900-d9c2-11eb-998f-46ce5d1c4a64.png)
 
 - AWS RDS에 저장된 artist_id 로 Spotify API를 통해 raw data 수집
 - S3에 저장하기 위해 계층형 구조의 raw data를 flat하게 변형
-- paruqet 포맷으로 압축된 데이터를 S3 저장 →  DataLake 구현
+- 컬럼기반 포맷(parquet)으로 압축된 데이터를 S3 저장 →  DataLake 구현
 
 
 ### Athena_data.py

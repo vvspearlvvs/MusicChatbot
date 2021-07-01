@@ -152,34 +152,36 @@ def audio_s3(tracks_batch,headers):
     return audio_features
 
 
+## 2가지 raw data수집,
 def main():
 
+    # Spotify API호출을 위한 Token
     headers = get_header(client_id, client_secret)
 
-    # 1.아티스트의 음악데이터(top_track)
+    ## 1.아티스트의 음악데이터(top_track)
     cursor.execute("Select artist_id,artist_name from artists")
     artist_result = cursor.fetchall()  # ('3HqSLMAZ3g3d5poNaI7GOU', 'IU'), ('3Nrfpe0tUJi4K4DXYWgMUX', 'BTS')
 
-    # flat한 dict형태->dataframe형태->parquet포맷 압축
+    ## 계층형 rawadata->flat한 dict형태->dataframe형태->parquet포맷 압축
     top_tracks_dict = toptrack_s3(artist_result,headers)
     top_tracks = pd.DataFrame(top_tracks_dict)
     top_tracks.to_parquet('Test-Batch/top-tracks.parquet', engine='pyarrow', compression='snappy')
 
-    # parquet형태의 top_track 데이터 s3에 저장
+    ## 압축된 top_track 데이터 s3에 저장
     data = open('Test-Batch/top-tracks.parquet', 'rb')
     date_time = datetime.utcnow().strftime('%Y-%m-%d')
     S3.put_object(Body=data,Bucket=Bucket_name,Key='top-tracks/dt={}/top_tracks.parquet'.format(date_time))
     logging.info("top track s3에 저장완료")
 
-    # 2.음악메타데이터(audio_features)
-    # 아티스트당 최소 10개의 노래정보가 있어서 track_id를 100개씩 묶어서 처리
+    ## 2.음악메타데이터(audio_features)
+    ## Spotifiy API 요청시 track_id를 100개씩 묶어서 처리
     track_ids = [track['track_id'] for track in top_tracks_dict]
     if len(track_ids)>100:
         tracks_batch = [track_ids[i: i+100] for i in range(0, len(track_ids), 100)]
     else:
         tracks_batch = [track_ids] #100개 이하, len(tracks_batch) = 1
 
-    # dict형태->dataframe형태 ->parquet포맷 압축
+    ## 이미 flat한 dict형태->dataframe형태 ->parquet포맷 압축
     audio_features_dict = audio_s3(tracks_batch,headers)
     audio_features = pd.DataFrame(audio_features_dict)
     audio_features.to_parquet('Test-Batch/audio-features.parquet', engine='pyarrow', compression='snappy')

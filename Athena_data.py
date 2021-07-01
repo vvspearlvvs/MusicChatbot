@@ -63,8 +63,7 @@ def get_query_result(query_id,Athena):
 
     return response
 
-# 데이터 프로세싱
-# key,value가 따로 저장된 형식을 key,value쌍으로 변형
+# 데이터 프로세싱 : 컬럼기반 데이터형식 -> 행기반 데이터형식
 def process_data(result):
     data = result['ResultSet']
     columns = [col['VarCharValue'] for col in data['Rows'][0]['Data']] # ex:['artist_id', 'danceability',..]
@@ -80,7 +79,7 @@ def process_data(result):
 
 #1. top_track 테이블생성 쿼리
 def query1():
-    # S3에 있는 parquet 파일을 참고해 데이터를 추출하고,구조화된 데이터로변환
+    ## 컬럼기반 파케이 포맷(S3) -> Athena 테이블생성
     query = """
         create external table if not exists top_tracks(
         track_id string,
@@ -105,7 +104,7 @@ def query1():
 
 #2. audio 테이블생성 쿼리
 def query2():
-
+    ## 컬럼기반 파케이 포맷(S3) -> Athena 테이블생성
     query = """
         create external table if not exists audio_features(
         duration_ms int,
@@ -135,7 +134,7 @@ def query2():
             result = get_query_result(r['QueryExecutionId'], Athena)
             logging.info('audio_features partition update!')
 
-#3. 아티스트별 평균 음악메타데이터 계산쿼리
+#3. 아티스트별 평균 음악메타데이터 조회 쿼리
 def query3():
 
     query = """
@@ -159,9 +158,10 @@ def query3():
         """
     r = query_athena(query, Athena)
 
+    ## 쿼리수행결과(result) : 컬럼기반 데이터
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
         result = get_query_result(r['QueryExecutionId'], Athena)
-        # 데이터프로세싱 전 (result) : key, value가 따로따로 저장됨 (row[0]:key, row[1:]:values)
+        # 데이터프로세싱 전 (result) : key, value가 따로따로 저장됨 (row[0]:key1,key2,, row[1:]:values1, values2,,)
         # ex : Row : [
         #      {"Data":[ {"VarCharValue":"artist_id"}, {"VarCharValue":"danceability"}, {..생략..} ] },
         #      {"Data":[ {"VarCharValue":"2KC9Qb60EaY0kW4eH68vr3"}, {"VarCharValue":"0.8013"}, {..생략..} ] },
@@ -169,6 +169,7 @@ def query3():
         #      {..생략..}
         #      ]
 
+        ## 데이터프로세싱결과 (artist) : 행기반 데이터
         artists=process_data(result)
         # 데이터프로세싱 후 (artists) : key, value가 쌍으로 저장됨
         # ex : artists :[ {"artist_id":"3Nrfpe0tUJi4K4DXYWgMUX","danceability":"0.6548","..생략.."} ]
@@ -176,7 +177,7 @@ def query3():
 
         return artists
 
-# 4. 정규화 위한 음악수치별 최대,최소 계산쿼리 (가장 최근 날짜 데이터 사용)
+# 4. 음악메타데이터의 정규화를 위한 최대,최소 조회쿼리
 def query4():
 
     query = """
@@ -200,6 +201,7 @@ def query4():
     """
     r = query_athena(query, Athena)
 
+    ## 쿼리수행결과(result) : 컬럼기반 데이터
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
         result = get_query_result(r['QueryExecutionId'], Athena)
         # 데이터프로세싱 전 (result) : key, value가 따로따로 저장됨
@@ -207,6 +209,8 @@ def query4():
         #      {"Data":[ {"VarCharValue":"danceability_min"}, {"VarCharValue":"danceability_max"}, {..생략..} ] },
         #      {"Data":[ {"VarCharValue":"0.344"}, {"VarCharValue":"0.874"}, {..생략..} ] },
         #      ]
+
+        ## 데이터프로세싱결과 (artist) : 행기반 데이터
         avgs = process_data(result)[0]
         # 데이터프로세싱 후 (avgs) : key, value가 쌍으로 저장됨
         # ex : artists :[ {"danceability_min":"0.344","danceability_max":"0.874","..생략.."} ]
@@ -239,9 +243,9 @@ def insert_row(cursor, data, table):
 
 def main():
     start_time = time.time()
-    ## 쿼리수행
-    query1() # top_track (아티스트의 음악데이터) 테이블 생성 쿼리수행
-    query2() # Audio (음악메타데이터) 테이블 생성 쿼리수행
+    ## 4가지 쿼리수행
+    query1() # top_track 테이블 생성 쿼리수행
+    query2() # Audio 테이블 생성 쿼리수행
     artists = query3() # 아티스트별 평균 음악메타데이터 쿼리결과 (ex : BTS 노래들의 평균 danceability)
     avgs = query4() # 음악메타데이터의 min,max 값 쿼리결과(ex : 비트,템포같은 danceability의 MIN,MAX)
 
@@ -254,14 +258,15 @@ def main():
         others = artists.copy() # 유사아티스트 후보들
         mine = others.pop(i) # 기준 아티스트
 
-        # others 중 에서 mine과 유사한 아티스트를 찾음
+        # mine과 other 사이의 거리가 가까울수록 유사도가 높다.
         for other in others:
             dist = 0
             for m in metrics:
-                ## 유사도 : 입력한 아티스트(mine)의 정규화값과 유사 아티스트 후보(other)의 정규화값 사이의 거리
-                x_norm = normalize(float(mine[m]), float(avgs[m + '_min']), float(avgs[m + '_max']))
-                y_norm = normalize(float(other[m]), float(avgs[m + '_min']), float(avgs[m + '_max']))
-                dist += math.sqrt((x_norm - y_norm)**2)
+
+                ## 유사도 : 입력한 아티스트(mine)의 정규화값과 각 아티스트 후보(other)의 정규화값 사이의 거리(dist)
+                mine_norm = normalize(float(mine[m]), float(avgs[m + '_min']), float(avgs[m + '_max']))
+                other_norm = normalize(float(other[m]), float(avgs[m + '_min']), float(avgs[m + '_max']))
+                dist += math.sqrt((mine_norm - other_norm)**2)
 
             if dist != 0:
                 temp = {
