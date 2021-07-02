@@ -1,4 +1,4 @@
-import json
+import json,os
 import requests
 import base64
 import logging
@@ -7,14 +7,14 @@ import pymysql
 import boto3
 from boto3.dynamodb.conditions import Attr
 
-client_id = ""
-client_secret = ""
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-ACCESS_KEY = ''
-SECRET_KEY = ''
+client_id = os.environ['spotify_id']
+client_secret = os.environ['spotify_secret']
 
-rds_host ='test-ver4.cj2sbwq1t1o1.ap-northeast-2.rds.amazonaws.com' #RDS: endpoint
-rds_user ='admin' #RDS: admin
+rds_host = os.environ['endpoint']
+rds_user ='admin'
 rds_pwd = 'qwer1234'
 rds_db = 'musicdb'
 
@@ -22,7 +22,7 @@ try:
     conn = pymysql.connect(host=rds_host, user=rds_user, password=rds_pwd, db=rds_db)
     cursor = conn.cursor()
 
-    dynamodb = boto3.resource('dynamodb',aws_access_key_id=ACCESS_KEY,aws_secret_access_key=SECRET_KEY,region_name='ap-northeast-2')
+    dynamodb = boto3.resource('dynamodb',region_name='ap-northeast-2')
     table=dynamodb.Table('artist_toptracks') #dynanoDB 파티션키 : track_id
 except:
     logging.error('could not connect to rds or dynamodb')
@@ -74,7 +74,7 @@ def kakao_card(name,followers,popularity,artist_url,image_url,track_result):
                     "simpleText": {
                         "text": " 유사한 아티스트의 노래는 아직 분석중입니다! "
                     }
-                }
+                },
 
 
             ]
@@ -99,7 +99,6 @@ def kakao_text(input_artist):
     }
     return result
 
-# 최종테스트 메세지 : 유사한 아티스트의 노래정보
 # Carousl타입 메세지
 def kakao_carousl(name,listcard_item):
     return {
@@ -184,8 +183,8 @@ def get_artist_api(artist_name,headers):
     ## 헤더에 token을 넣은 get방식으로 메세지 요청
     search_r=requests.get(endpoint,params=query_params,headers=headers)
     search_ar=json.loads(search_r.text)
+    logger.info("API를 통해 artist 데이터수집")
     #print(search_ar)
-    logging.info("API를 통해 rawdata(아티스트정보) 수집")
 
     ## 안정적인 데이터수집을 위한 API호출 예외처리
     if search_r.status_code!=200:
@@ -229,8 +228,8 @@ def get_toptracks_api(artist_id,headers):
     ## 헤더에 token을 넣은 get방식으로 메세지 요청
     artist_t=requests.get(endpoint,params=query_params,headers=headers)
     artist_tr=json.loads(artist_t.text)
-    print(artist_tr)
-    logging.info("API를 통해 rawdata(음악정보) 수집집")
+    logging.info("API를 통해 top-trackss 데이터수집")
+    #print(artist_tr)
 
     ## 안정적인 데이터수집을 위한 API호출 예외처리
     if artist_t.status_code!=200:
@@ -257,13 +256,13 @@ def get_toptracks_api(artist_id,headers):
             'track_name': track['name'],
             'track_url': track['external_urls']['spotify'],
             'album':{
-                    'album_id': track['album']['id'],
-                    'album_name': track['album']['name'],
-                    'album_type': track['album']['album_type'],
-                    'album_image': track['album']['images'][0]['url'],
-                    'release_date': track['album']['release_date'],
-                    'total_tracks': track['album']['total_tracks']
-                 }
+                'album_id': track['album']['id'],
+                'album_name': track['album']['name'],
+                'album_type': track['album']['album_type'],
+                'album_image': track['album']['images'][0]['url'],
+                'release_date': track['album']['release_date'],
+                'total_tracks': track['album']['total_tracks']
+            }
         }
         table.put_item(Item=data)
 
@@ -273,12 +272,14 @@ def get_toptracks_api(artist_id,headers):
 def get_toptracks_db(id):
     # 파티션키가 아닌 컬럼으로 조회하기 위해 query 대신 scan사용
     select_result = table.scan(FilterExpression = Attr('artist_id').eq(id))
-    print("Dynamodb 스캔결과 ")
-    print(select_result)
+    logging.info("Dynamodb에서 top-tracks 조회결과")
+    #print(select_result)
+
     #최근 발매된 앨범순으로 정렬
     select_result['Items'].sort(key=lambda x: x['album']['release_date'], reverse=True)
     items = []
     for track in select_result['Items'][:3]: #최근 발매된 3개의 데이터만 가져오기
+
         # ListCard의 item형태에 맞게 변형
         temp_dic = {
             "title": track['track_name'], #타이틀곡명
@@ -288,14 +289,22 @@ def get_toptracks_db(id):
                 "web": track['track_url'] #스포티파이링크
             }
         }
-        items.append(track['artist_name'])
         items.append(temp_dic)
 
     return items
 
+def response_message(message):
+    return {
+        'statusCode':200,
+        'body': json.dumps(message),
+        'headers': {
+            'Access-Control-Allow-Origin': '*',
+        }
+    }
+
 
 ## 사용자 -> "아티스트입력" -> 챗봇 -> body : "requst msg" -> API Gateway -> "트리거발생" -> Lambda 호출
-def lambda_handler(event):
+def lambda_handler(event,context):
 
     # request 내용은 event의 ['body']에 들어 있음
     request_body = json.loads(event['body'])
@@ -305,18 +314,17 @@ def lambda_handler(event):
     select_query="SELECT * from artists where artist_name ='{}'".format(input_artist)
     cursor.execute(select_query)
     artist_result = cursor.fetchall()
+    logging.info("artists RDS조회 결과")
     #print(artist_result)
-    logging.info("아티스트 검색완료")
 
     # 1-1.기존 아티스트일 경우 -> RDS와 DynamoDB에 저장된 관련정보 카카오톡 msg전송
     if len(artist_result)>0:
         id,name, followers,popularity,artist_url,image_url = artist_result[0]
         track_result=get_toptracks_db(id) # 아티스트id기준 Dynamodb결과
-        logging.info("아티스트 노래정보 검색완료")
-        print(track_result)
+        logging.info("DynamoDB조회 결과->챗봇 메세지형태로 변환")
+        #print(track_result)
 
-
-    # 2.입력받은 아티스트와 유사한 아티스트 음악정보 조회
+        # 2.입력받은 아티스트와 유사한 아티스트 음악정보 조회
         select_query="SELECT other_artist,artist_name,distance " \
                      "from related_artists join artists " \
                      "on related_artists.other_artist = artists.artist_id " \
@@ -326,7 +334,7 @@ def lambda_handler(event):
         # artist : 입력받은 아티스트정보 테이블, related_artists : 아티스트간 유사도정보 테이블
         cursor.execute(select_query)
         related_result = cursor.fetchall()
-        logging.info("아티스트간 유사도 검색완료")
+        logging.info("artist와related_artists조인 결과")
         #print(related_result)
 
         # s3,athena 스크립트가 수행되어 아티스트에 대한 유사도 분석결과가 있을 경우
@@ -342,115 +350,27 @@ def lambda_handler(event):
                 list_card_list.append(list_card_item['listCard']) #리스트카드 메세지들의 리스트 케로셀 타입 메세지
 
             # 최종메세지.검색한 아티스트와 유사한 아티스의 음악정보 메세지 전송
+            logging.info("기존.데이터처리 및 분석 후")
             message = kakao_carousl(name,list_card_list)
+
         else:
             # 아직 s3,athena 스트립트가 수행되지 않아 유사도 분석결과가 없을 경우
             # 최종메세지.검색한 아티스트정보 메세지 전송
+            logging.info("기존.데이터처리 및 분석 전")
             message = kakao_card(name,followers,popularity,artist_url,image_url,track_result)
 
 
     #1-2. 신규 아티스트일 경우 -> 스포티파이API를 통해 데이터수집 및 저장
     else:
-        message=kakao_text(input_artist)
+        logging.info("신규.데이터수집 및 저장")
         artist_id = get_artist_api(input_artist,get_header()) #아티스트정보 RDS 저장
         get_toptracks_api(artist_id,get_header()) #음악정보 DynamoDB 저장
+        message=kakao_text(input_artist)
 
-    logging.info("카카오 챗봇에게 최종메세지 전송")
+    logging.info("챗봇에게 보낼 최종메세지")
     print(message)
-
-
     return {
         'statusCode':200,
         'body': json.dumps(message),
-        'headers': {
-            'Access-Control-Allow-Origin': '*',
-        }
+        'headers': {'Access-Control-Allow-Origin': '*',}
     }
-
-#local환경에서 테스트를 위한 lambda event
-event={
-    "resource":"/music-kakaobot",
-    "path":"/music-kakaobot",
-    "httpMethod":"POST",
-    "headers":{
-        "accept":"*/*",
-        "Content-Type":"application/json",
-        "Host":"mp9dovesu7.execute-api.ap-northeast-2.amazonaws.com",
-        "User-Agent":"AHC/2.1",
-        "X-Amzn-Trace-Id":"Root=1-60ccd0a3-79b8389864d8d89733cea76a",
-        "X-Chappie-Footprint":"chp-9e46d5a9714d40f78c28bd8a5aa90c12",
-        "X-Forwarded-For":"219.249.231.40",
-        "X-Forwarded-Port":"443",
-        "X-Forwarded-Proto":"https",
-        "X-Request-Id":"chp-9e46d5a9714d40f78c28bd8a5aa90c12"
-    },
-    "multiValueHeaders":{
-        "accept":[
-            "*/*"
-        ],
-        "Content-Type":[
-            "application/json"
-        ],
-        "Host":[
-            "mp9dovesu7.execute-api.ap-northeast-2.amazonaws.com"
-        ],
-        "User-Agent":[
-            "AHC/2.1"
-        ],
-        "X-Amzn-Trace-Id":[
-            "Root=1-60ccd0a3-79b8389864d8d89733cea76a"
-        ],
-        "X-Chappie-Footprint":[
-            "chp-9e46d5a9714d40f78c28bd8a5aa90c12"
-        ],
-        "X-Forwarded-For":[
-            "219.249.231.40"
-        ],
-        "X-Forwarded-Port":[
-            "443"
-        ],
-        "X-Forwarded-Proto":[
-            "https"
-        ],
-        "X-Request-Id":[
-            "chp-9e46d5a9714d40f78c28bd8a5aa90c12"
-        ]
-    },
-    "queryStringParameters":"None",
-    "multiValueQueryStringParameters":"None",
-    "pathParameters":"None",
-    "stageVariables":"None",
-    "requestContext":{
-        "resourceId":"hmv0y7",
-        "resourcePath":"/music-kakaobot",
-        "httpMethod":"POST",
-        "extendedRequestId":"BIWJiH8KIE0FrQw=",
-        "requestTime":"18/Jun/2021:16:58:11 +0000",
-        "path":"/default/music-kakaobot",
-        "accountId":"129329859727",
-        "protocol":"HTTP/1.1",
-        "stage":"default",
-        "domainPrefix":"mp9dovesu7",
-        "requestTimeEpoch":1624035491217,
-        "requestId":"21687fa2-b634-4994-a688-a83629cc892d",
-        "identity":{
-            "cognitoIdentityPoolId":"None",
-            "accountId":"None",
-            "cognitoIdentityId":"None",
-            "caller":"None",
-            "sourceIp":"219.249.231.40",
-            "principalOrgId":"None",
-            "accessKey":"None",
-            "cognitoAuthenticationType":"None",
-            "cognitoAuthenticationProvider":"None",
-            "userArn":"None",
-            "userAgent":"AHC/2.1",
-            "user":"None"
-        },
-        "domainName":"mp9dovesu7.execute-api.ap-northeast-2.amazonaws.com",
-        "apiId":"mp9dovesu7"
-    },
-    "body":"{\"bot\":{\"id\":\"60b628c87e223a78e8750a68!\",\"name\":\"스포티파이 검색 봇\"},\"intent\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \",\"extra\":{\"reason\":{\"code\":1,\"message\":\"OK\"}}},\"action\":{\"id\":\"60bc72c24e460e6c6be02a11\",\"name\":\"API Gateway Server\",\"params\":{\"group\":\"twice\"},\"detailParams\":{\"group\":{\"groupName\":\"\",\"origin\":\"twice\",\"value\":\"twice\"}},\"clientExtra\":{}},\"userRequest\":{\"block\":{\"id\":\"60bd22f6a0293f36984913ef\",\"name\":\"국내아티스트명 블록 \"},\"user\":{\"id\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"type\":\"botUserKey\",\"properties\":{\"botUserKey\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"isFriend\":true,\"plusfriendUserKey\":\"cCFcsmWzskCa\",\"bot_user_key\":\"c3e55311e419995dfdbfac37cc496f390887539b442129dc07dbeb3a9d2420ec24\",\"plusfriend_user_key\":\"cCFcsmWzskCa\"}},\"utterance\":\"twice\",\"params\":{\"surface\":\"Kakaotalk.plusfriend\"},\"lang\":\"ko\",\"timezone\":\"Asia/Seoul\"},\"contexts\":[]}",
-    "isBase64Encoded":'false'
-}
-lambda_handler(event)
