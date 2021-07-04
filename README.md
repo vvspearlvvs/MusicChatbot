@@ -67,18 +67,17 @@ Athena 쿼리수행 및 아티스트 간 유사도를 계산하여 RDS에 저장
 
 
 ### 프로젝트 결과 
-1. 중간 테스트결과 : 입력한 아티스트와 노래정보 전달 <br>
+1. 신규 아티스트 입력결과 : 데이터처리 및 분석이 이뤄지지 않아 입력한 아티스트와 노래정보 전달
 
-![1차](https://user-images.githubusercontent.com/78723318/123676531-06b67880-d87f-11eb-9735-04a6c206f647.PNG)
+![사례1 분석중](https://user-images.githubusercontent.com/78723318/124323880-fb37ba00-dbbc-11eb-86ac-c511dfb9a8e7.PNG)
 
-2. 최종 테스트결과 : 입력한 아티스트와 가장 유사한 아티스트(Top3)의 노래정보 전달 <br>
+2. 기존 아티스트 입력결과 : 데이터처리 및 분석결과 (입력한 아티스트와 가장 유사한 아티스트의 노래정보) 전달 <br>
 
-![캡처](https://user-images.githubusercontent.com/78723318/123676060-68c2ae00-d87e-11eb-9d5c-4c750a866a41.PNG)
+![사례2 분석결과](https://user-images.githubusercontent.com/78723318/124323992-291cfe80-dbbd-11eb-9abc-7be9b5ff6835.PNG)
 
 
 ### 보완할점
 
 - S3,Athena 스트립트 처리 자동화를 위한 crontab 또는 airflow 적용
-- 유사도 정확성을 높이기 위한 알고리즘 변경적용
-- 스포티파이 API 저장된 아티스트 이름으로 검색해야하는 문제점 해결 (예: IU (O), 아이유(X)) <br>
-  현재 영어와 한글이 차이가 없는 아티스트명(BTS,IU,BTOB,ITZY,APINK,DAY6 등)으로 테스트 진행
+- 유사도 정확성을 높이기 위한 알고리즘 변경고려
+ 

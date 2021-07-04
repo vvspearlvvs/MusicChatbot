@@ -6,8 +6,8 @@ import time,math
 ACCESS_KEY = ''
 SECRET_KEY = ''
 
-rds_host ='localhost' #RDS로 변경시 Public endpoint
-rds_user ='root' #RDS로 변경시 admin
+rds_host ='database-1.cj2sbwq1t1o1.ap-northeast-2.rds.amazonaws.com' #RDS로 변경시 Public endpoint
+rds_user ='admin' #RDS로 변경시 admin
 rds_pwd = ''
 rds_db = 'musicdb'
 
@@ -63,7 +63,7 @@ def get_query_result(query_id,Athena):
 
     return response
 
-# 데이터 프로세싱 : 컬럼기반 데이터형식 -> 행기반 데이터형식
+# 데이터 구조화 : 컬럼기반 데이터형식 -> 행기반 데이터형식
 def process_data(result):
     data = result['ResultSet']
     columns = [col['VarCharValue'] for col in data['Rows'][0]['Data']] # ex:['artist_id', 'danceability',..]
@@ -79,7 +79,7 @@ def process_data(result):
 
 #1. top_track 테이블생성 쿼리
 def query1():
-    ## 컬럼기반 파케이 포맷(S3) -> Athena 테이블생성
+    ## S3 데이터  -> Athena 테이블생성
     query = """
         create external table if not exists top_tracks(
         track_id string,
@@ -88,14 +88,14 @@ def query1():
         album_name string,
         popularity int,
         image_url string
-        ) partitioned by (dt string)
+        ) partitioned by (dt string) 
         stored as parquet location 's3://{}/top-tracks/' 
         tblproperties("parquet.compress" = "snappy")
     """.format(Bucket_name)
-    r = query_athena(query, Athena)
+    r = query_athena(query, Athena) ## S3경로지정시 생성한 날짜(dt) 파티션 정의
 
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
-        query = 'msck repair table top_tracks' # top_tracks 파티션등록
+        query = 'msck repair table top_tracks' ## top_tracks 파티션추가 쿼리
         r = query_athena(query, Athena)
 
         if r['ResponseMetadata']['HTTPStatusCode'] == 200:
@@ -104,7 +104,7 @@ def query1():
 
 #2. audio 테이블생성 쿼리
 def query2():
-    ## 컬럼기반 파케이 포맷(S3) -> Athena 테이블생성
+    ## S3 데이터 -> Athena 테이블생성 (날짜기준 파티션)
     query = """
         create external table if not exists audio_features(
         duration_ms int,
@@ -125,10 +125,10 @@ def query2():
         stored as parquet location 's3://{}/audio-features/' 
         tblproperties("parquet.compress" = "snappy")
     """.format(Bucket_name)
-    r = query_athena(query, Athena)
+    r = query_athena(query, Athena)  ## S3경로지정시 생성한 날짜(dt) 파티션 정의
 
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
-        query = 'msck repair table audio_features' # audio_features 파티션등록
+        query = 'msck repair table audio_features' # audio_feature 파티션추가 쿼리
         r = query_athena(query, Athena)
         if r['ResponseMetadata']['HTTPStatusCode'] == 200:
             result = get_query_result(r['QueryExecutionId'], Athena)
@@ -158,7 +158,7 @@ def query3():
         """
     r = query_athena(query, Athena)
 
-    ## 쿼리수행결과(result) : 컬럼기반 데이터
+    ## 쿼리수행결과(result)
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
         result = get_query_result(r['QueryExecutionId'], Athena)
         # 데이터프로세싱 전 (result) : key, value가 따로따로 저장됨 (row[0]:key1,key2,, row[1:]:values1, values2,,)
@@ -169,7 +169,7 @@ def query3():
         #      {..생략..}
         #      ]
 
-        ## 데이터프로세싱결과 (artist) : 행기반 데이터
+        ## 데이터구조화 결과 (artist)
         artists=process_data(result)
         # 데이터프로세싱 후 (artists) : key, value가 쌍으로 저장됨
         # ex : artists :[ {"artist_id":"3Nrfpe0tUJi4K4DXYWgMUX","danceability":"0.6548","..생략.."} ]
@@ -177,7 +177,7 @@ def query3():
 
         return artists
 
-# 4. 음악메타데이터의 정규화를 위한 최대,최소 조회쿼리
+# 4. 정규화를 위한 음악메타데이터의 최대,최소 조회쿼리
 def query4():
 
     query = """
@@ -201,7 +201,7 @@ def query4():
     """
     r = query_athena(query, Athena)
 
-    ## 쿼리수행결과(result) : 컬럼기반 데이터
+    ## 쿼리수행결과(result)
     if r['ResponseMetadata']['HTTPStatusCode'] == 200:
         result = get_query_result(r['QueryExecutionId'], Athena)
         # 데이터프로세싱 전 (result) : key, value가 따로따로 저장됨
@@ -210,7 +210,7 @@ def query4():
         #      {"Data":[ {"VarCharValue":"0.344"}, {"VarCharValue":"0.874"}, {..생략..} ] },
         #      ]
 
-        ## 데이터프로세싱결과 (artist) : 행기반 데이터
+        ## 데이터구조화 결과 (avgs)
         avgs = process_data(result)[0]
         # 데이터프로세싱 후 (avgs) : key, value가 쌍으로 저장됨
         # ex : artists :[ {"danceability_min":"0.344","danceability_max":"0.874","..생략.."} ]
@@ -286,7 +286,7 @@ def main():
 
     conn.commit()
     cursor.close()
-    logging.info("아티스트간 유사도 mysql 저장완료")
+    print("아티스트간 유사도 mysql 저장완료")
     print("실행시간 : {:.1f}s ".format(time.time()-start_time))
 
 if __name__=='__main__':

@@ -329,7 +329,8 @@ def lambda_handler(event,context):
                      "from related_artists join artists " \
                      "on related_artists.other_artist = artists.artist_id " \
                      "where mine_artist ='{}' " \
-                     "order by distance desc ".format(id)
+                     "order by distance desc " \
+                     "limit 3".format(id)
         # 유사한 아티스트 이름을 뽑기 위해 join 수행
         # artist : 입력받은 아티스트정보 테이블, related_artists : 아티스트간 유사도정보 테이블
         cursor.execute(select_query)

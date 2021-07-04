@@ -14,8 +14,8 @@ client_secret = ""
 ACCESS_KEY = ''
 SECRET_KEY = ''
 
-rds_host ='localhost' #RDS: endpoint
-rds_user ='root' #RDS: admin
+rds_host ='database-1.cj2sbwq1t1o1.ap-northeast-2.rds.amazonaws.com' #RDS: endpoint
+rds_user ='admin' #RDS: admin
 rds_pwd = ''
 rds_db = 'musicdb'
 
@@ -152,7 +152,7 @@ def audio_s3(tracks_batch,headers):
     return audio_features
 
 
-## 2가지 raw data수집,
+## 2가지 raw data수집,데이터처리 후 s3 저장
 def main():
 
     # Spotify API호출을 위한 Token
@@ -171,7 +171,7 @@ def main():
     data = open('Test-Batch/top-tracks.parquet', 'rb')
     date_time = datetime.utcnow().strftime('%Y-%m-%d')
     S3.put_object(Body=data,Bucket=Bucket_name,Key='top-tracks/dt={}/top_tracks.parquet'.format(date_time))
-    logging.info("top track s3에 저장완료")
+    print("top track s3에 저장완료")
 
     ## 2.음악메타데이터(audio_features)
     ## Spotifiy API 요청시 track_id를 100개씩 묶어서 처리
@@ -190,7 +190,7 @@ def main():
     data = open('Test-Batch/audio-features.parquet', 'rb')
     date_time = datetime.utcnow().strftime('%Y-%m-%d')
     S3.put_object(Body=data,Bucket=Bucket_name,Key='audio-features/dt={}/audio_features.parquet'.format(date_time))
-    logging.info("audio s3에 저장 ")
+    print("audio s3에 저장 ")
 
 
 if __name__=='__main__':
