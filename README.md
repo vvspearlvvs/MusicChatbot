@@ -2,6 +2,7 @@
 <hr>
 
 전체적인 진행과정은 블로그에서 확인할 수 있습니다: https://pearlluck.tistory.com/notice/572
+완성된 카카오톡 음악추천챗봇입니다, 카카오톡 친구추가를 하여 확인할 수 있습니다.: https://pf.kakao.com/_LKGCs
 
 ### 개요
 Spotify(음원서비스)API의 아티스트와 음원데이터를 이용하여 <br>
