@@ -1,7 +1,7 @@
 ## 음악추천챗봇과 AWS 데이터파이프라인
 <hr>
 
-전체적인 진행과정은 블로그에서 확인할 수 있습니다: https://pearlluck.tistory.com/notice/572
+전체적인 진행과정은 블로그에서 확인할 수 있습니다: https://pearlluck.tistory.com/notice/572 <br>
 완성된 카카오톡 음악추천챗봇입니다, 카카오톡 친구추가를 하여 확인할 수 있습니다.: https://pf.kakao.com/_LKGCs
 
 ### 개요
