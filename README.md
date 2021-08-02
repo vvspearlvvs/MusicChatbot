@@ -81,4 +81,7 @@ Athena 쿼리수행 및 아티스트 간 유사도를 계산하여 RDS에 저장
 
 - S3,Athena 스트립트 처리 자동화를 위한 crontab 또는 airflow 적용
 - 유사도 정확성을 높이기 위한 알고리즘 변경고려
+
+### 0802추가. S3데이터의 Spark처리를 위한 준비
+- Docker기반 빅데이터분석환경 구축 (Hadoop, Spark, Zeppeline) 
  
