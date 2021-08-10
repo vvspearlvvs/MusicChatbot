@@ -1,7 +1,8 @@
 ## 음악추천챗봇과 AWS 데이터파이프라인
 <hr>
 
-전체적인 진행과정은 블로그에서 확인할 수 있습니다: https://pearlluck.tistory.com/notice/572
+전체적인 진행과정은 블로그에서 확인할 수 있습니다: https://pearlluck.tistory.com/notice/572 <br>
+완성된 카카오톡 음악추천챗봇입니다, 카카오톡 친구추가를 하여 확인할 수 있습니다.: https://pf.kakao.com/_LKGCs
 
 ### 개요
 Spotify(음원서비스)API의 아티스트와 음원데이터를 이용하여 <br>
@@ -81,4 +82,7 @@ Athena 쿼리수행 및 아티스트 간 유사도를 계산하여 RDS에 저장
 
 - S3,Athena 스트립트 처리 자동화를 위한 crontab 또는 airflow 적용
 - 유사도 정확성을 높이기 위한 알고리즘 변경고려
+
+### 0802추가. S3데이터의 Spark처리를 위한 준비
+- Docker기반 빅데이터분석환경 구축 (Hadoop, Spark, Zeppeline) 
  
