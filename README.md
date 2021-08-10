@@ -27,8 +27,8 @@ Spotify(음원서비스)API의 아티스트와 음원데이터를 이용하여 <
 
 ### 아키텍쳐  
 AWS API Gateway와 AWS Lambda기반의 Serverless 구조
+![serverelss2](C:\Users\gg664\IdeaProjects\MusicChatbot\images\serverless_2.PNG)
 
-![Untitled](https://user-images.githubusercontent.com/78723318/123921138-a845e300-d9c1-11eb-8426-ed4e4bc3c019.png)
 - 사용자가 챗봇에게 아티스트를 입력하면 API Gateway가 트리거가 되어 lambda 함수가 호출
 - 챗봇이 API Gateway를 거쳐 POST 방식으로 보낸 request 메세지를 lambda가 받아 처리한다.   
 - 사용자의 Request가 있을때만 동작하여 저렴한 비용으로 서비스 운영가능
@@ -36,7 +36,8 @@ AWS API Gateway와 AWS Lambda기반의 Serverless 구조
 
 
 ### 데이터파이프라인 
-![datapipeline_1] (./images/datapipeline_1.PNG)
+![datapipline](C:\Users\gg664\IdeaProjects\MusicChatbot\images\datapipeline_1.PNG)
+
 ### lambda_function.py
 Spotify API를 기반으로 데이터를 수집하고, 저장하여 카카오톡 메세지 형태로 응답해주는 로직처리 <br>
 
