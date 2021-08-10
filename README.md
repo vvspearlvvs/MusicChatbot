@@ -27,7 +27,8 @@ Spotify(음원서비스)API의 아티스트와 음원데이터를 이용하여 <
 
 ### 아키텍쳐  
 AWS API Gateway와 AWS Lambda기반의 Serverless 구조
-![serverelss2](C:\Users\gg664\IdeaProjects\MusicChatbot\images\serverless_2.PNG)
+
+![serverelss2](images/serverless_2.PNG)
 
 - 사용자가 챗봇에게 아티스트를 입력하면 API Gateway가 트리거가 되어 lambda 함수가 호출
 - 챗봇이 API Gateway를 거쳐 POST 방식으로 보낸 request 메세지를 lambda가 받아 처리한다.   
@@ -36,9 +37,17 @@ AWS API Gateway와 AWS Lambda기반의 Serverless 구조
 
 
 ### 데이터파이프라인 
-![datapipline](C:\Users\gg664\IdeaProjects\MusicChatbot\images\datapipeline_1.PNG)
+S3,EMR,Athena 등을 활용한 AWS기반의 데이터파이프라인 
 
-### lambda_function.py
+![datapipline](images/datapipeline_1.PNG)
+
+- rawdata인 SpotifyAPI와 RDS, DynamoDB에 흩어져 저장되어 있던 데이터를 분산스토리지인 S3로 모아 DataLake 구현 
+- 대화형쿼리엔진인 Athena를 사용하여 쿼리수행 후 유사도결과를 별도로 저장하여 데이터마트 구현
+- 빅데이터 플랫폼인 EMR 클러스터를 구성하여 S3에 저장된 데이터를 Hadoop 및 Spark로 분석, Zeppelin에서 시각화
+
+### 코드리뷰 및 스크립트 설명 
+
+### 1. lambda_function.py
 Spotify API를 기반으로 데이터를 수집하고, 저장하여 카카오톡 메세지 형태로 응답해주는 로직처리 <br>
 
 ![Untitled (1)](https://user-images.githubusercontent.com/78723318/123921481-007ce500-d9c2-11eb-9694-87b4d694c9a5.png)
@@ -49,7 +58,7 @@ Spotify API를 기반으로 데이터를 수집하고, 저장하여 카카오톡
 - 신규 아티스트를 받았을 경우, Spotify API를 통해 관련 데이터 수집 및 저장 
 - 예를 들어,아티스트 데이터(artists) AWS RDS, 아티스트의 음악정보 데이터(top_track) AWS DynamoDB
 
-### S3_Datalake.py
+### 2. S3_Datalake.py
 raw data를 parquet 포맷으로 압축하여 S3에 저장하는 로직처리 <br>
 
 ![Untitled (3)](https://user-images.githubusercontent.com/78723318/123921987-8ac54900-d9c2-11eb-998f-46ce5d1c4a64.png)
@@ -59,7 +68,7 @@ raw data를 parquet 포맷으로 압축하여 S3에 저장하는 로직처리 <b
 - 컬럼기반 포맷(parquet)으로 압축된 데이터를 S3 저장 →  DataLake 구현
 
 
-### Athena_data.py
+### 3. Athena_data.py
 Athena 쿼리수행 및 아티스트 간 유사도를 계산하여 RDS에 저장하는 로직처리 <br>
 
 ![캡처](https://user-images.githubusercontent.com/78723318/124017992-57b2a200-da22-11eb-8a14-51eca5b16202.PNG)
@@ -83,7 +92,4 @@ Athena 쿼리수행 및 아티스트 간 유사도를 계산하여 RDS에 저장
 
 - S3,Athena 스트립트 처리 자동화를 위한 crontab 또는 airflow 적용
 - 유사도 정확성을 높이기 위한 알고리즘 변경고려
-
-### 0802추가. S3데이터의 Spark처리를 위한 준비
-- Docker기반 빅데이터분석환경 구축 (Hadoop, Spark, Zeppeline) 
- 
+- EMR 클러스터로 쉽게 구축한 빅데이터 분석환경을 Docker기반으로도 구축해보기
