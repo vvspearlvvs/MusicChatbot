@@ -15,7 +15,7 @@ client_secret = os.environ['spotify_secret']
 
 rds_host = os.environ['endpoint']
 rds_user ='admin'
-rds_pwd = 'qwer1234'
+rds_pwd = ''
 rds_db = 'musicdb'
 
 try:

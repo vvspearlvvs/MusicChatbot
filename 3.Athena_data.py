@@ -3,12 +3,12 @@ import pymysql
 import logging
 import time,math
 
-ACCESS_KEY = 'AKIAR4HFJBSHRBNI4YGX'
-SECRET_KEY = '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'
+ACCESS_KEY = ''
+SECRET_KEY = ''
 
 rds_host ='database-1.cj2sbwq1t1o1.ap-northeast-2.rds.amazonaws.com' #RDS로 변경시 Public endpoint
 rds_user ='admin' #RDS로 변경시 admin
-rds_pwd = 'qwer1234'
+rds_pwd = ''
 rds_db = 'musicdb'
 
 try:

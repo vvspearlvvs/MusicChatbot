@@ -8,11 +8,11 @@ from datetime import datetime
 import jsonpath
 import pandas as pd
 
-client_id = "c87e807943a1483883faaaa881aa43ef"
-client_secret = "110de254602e440ea1f72f08f8396ccc"
+client_id = ""
+client_secret = ""
 
-ACCESS_KEY = 'AKIAR4HFJBSHRBNI4YGX'
-SECRET_KEY = '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'
+ACCESS_KEY = ''
+SECRET_KEY = ''
 
 rds_host ='database-1.cj2sbwq1t1o1.ap-northeast-2.rds.amazonaws.com' #RDS: endpoint
 rds_user ='admin' #RDS: admin
