@@ -35,6 +35,7 @@ AWS API Gateway와 AWS Lambda기반의 Serverless 구조
 
 
 ### 데이터파이프라인 
+![datapipeline_1] (./images/datapipeline_1.PNG)
 ### lambda_function.py
 Spotify API를 기반으로 데이터를 수집하고, 저장하여 카카오톡 메세지 형태로 응답해주는 로직처리 <br>
 
