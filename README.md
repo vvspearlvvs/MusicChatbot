@@ -39,7 +39,7 @@ AWS API Gateway와 AWS Lambda기반의 Serverless 구조
 ### 데이터파이프라인 
 S3,EMR,Athena 등을 활용한 AWS기반의 데이터파이프라인 
 
-![datapipline](images/datapipeline_1.PNG)
+![datapipline](images/datapipeline_2.PNG)
 
 - rawdata인 SpotifyAPI와 RDS, DynamoDB에 흩어져 저장되어 있던 데이터를 분산스토리지인 S3로 모아 DataLake 구현 
 - 대화형쿼리엔진인 Athena를 사용하여 쿼리수행 후 유사도결과를 별도로 저장하여 데이터마트 구현
